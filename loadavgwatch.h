@@ -19,6 +19,10 @@
 #ifndef LOADAVGWATCH_H
 #define LOADAVGWATCH_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif // #ifdef __cplusplus
+
 #include <stdint.h>
 
 typedef enum loadavgwatch_status
@@ -61,4 +65,8 @@ loadavgwatch_status loadavgwatch_poll(
 loadavgwatch_status loadavgwatch_register_start(loadavgwatch_state* state);
 loadavgwatch_status loadavgwatch_register_stop(loadavgwatch_state* state);
 
-#endif /* #ifndef LOADAVGWATCH_H */
+#ifdef __cplusplus
+}
+#endif // #ifdef __cplusplus
+
+#endif // #ifndef LOADAVGWATCH_H
