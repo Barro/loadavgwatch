@@ -36,7 +36,7 @@ typedef enum loadavgwatch_status
     LOADAVGWATCH_ERR_CLOCK = -6
 } loadavgwatch_status;
 
-typedef struct loadavgwatch_state loadavgwatch_state;
+typedef struct _loadavgwatch_state loadavgwatch_state;
 
 typedef struct loadavgwatch_init_parameter
 {

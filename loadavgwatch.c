@@ -26,16 +26,16 @@
 #include <string.h>
 #include <time.h>
 
-#define PRINT_LOG_MESSAGE(log_object, message...) \
+#define PRINT_LOG_MESSAGE(log_object, ...) \
     { \
         char log_buffer[256] = {0}; \
-        snprintf(log_buffer, sizeof(log_buffer), message); \
+        snprintf(log_buffer, sizeof(log_buffer), __VA_ARGS__); \
         (log_object).log(log_buffer, (log_object).data); \
     }
 
 typedef int(*clock_callback)(clockid_t clk_id, struct timespec* tp);
 
-typedef struct loadavgwatch_state
+struct _loadavgwatch_state
 {
     float last_load_average;
     float start_load;
@@ -57,7 +57,7 @@ typedef struct loadavgwatch_state
     loadavgwatch_log_object log_warning;
 
     FILE* loadavg_fp;
-} loadavgwatch_state;
+};
 
 static void log_null(
     const char* message __attribute__((unused)),
@@ -144,7 +144,7 @@ static loadavgwatch_status read_parameters(
     current_parameter = parameters;
     while (has_unknown && current_parameter->key != NULL) {
         bool is_valid = false;
-        for (const char** parameter = (const char**)(&valid_parameters._first + 1);
+        for (const char* const* parameter = &valid_parameters._first + 1;
              parameter < &valid_parameters._last;
              ++parameter) {
             if (strcmp(current_parameter->key, *parameter) == 0) {
