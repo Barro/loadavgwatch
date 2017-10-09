@@ -20,6 +20,7 @@
 
 #include <assert.h>
 #include "loadavgwatch.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -90,17 +91,33 @@ static loadavgwatch_status read_parameters(
     loadavgwatch_state* inout_state)
 {
     const loadavgwatch_init_parameter* current_parameter = parameters;
+    const struct {
+        const char* _first;
+        const char* log_info;
+        const char* log_warning;
+        const char* log_error;
+        const char* start_load;
+        const char* stop_load;
+        const char* _last;
+    } valid_parameters = {
+        .log_info = "log-info",
+        .log_warning = "log-warning",
+        .log_error = "log-error",
+        .start_load = "start-load",
+        .stop_load = "stop-load",
+    };
+    bool has_unknown = false;
     while (current_parameter->key != NULL) {
-        if (strcmp(current_parameter->key, "log-info") == 0) {
+        if (strcmp(current_parameter->key, valid_parameters.log_info) == 0) {
             inout_state->log_info = *(
                 (loadavgwatch_log_object*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, "log-warning") == 0) {
+        } else if (strcmp(current_parameter->key, valid_parameters.log_warning) == 0) {
             inout_state->log_warning = *(
                 (loadavgwatch_log_object*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, "log-error") == 0) {
+        } else if (strcmp(current_parameter->key, valid_parameters.log_error) == 0) {
             inout_state->log_error = *(
                 (loadavgwatch_log_object*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, "start-load") == 0) {
+        } else if (strcmp(current_parameter->key, valid_parameters.start_load) == 0) {
             char* load_value = (char*)current_parameter->value;
             char* endptr = NULL;
             float start_load = strtof(load_value, &endptr);
@@ -108,7 +125,7 @@ static loadavgwatch_status read_parameters(
                 return LOADAVGWATCH_ERR_INVALID_PARAMETER;
             }
             inout_state->start_load = start_load;
-        } else if (strcmp(current_parameter->key, "stop-load") == 0) {
+        } else if (strcmp(current_parameter->key, valid_parameters.stop_load) == 0) {
             char* load_value = (char*)current_parameter->value;
             char* endptr = NULL;
             float stop_load = strtof(load_value, &endptr);
@@ -117,10 +134,33 @@ static loadavgwatch_status read_parameters(
             }
             inout_state->stop_load = stop_load;
         } else {
-            // TODO print warning
+            // We haven't initialized the logger yet. Register the
+            // problem, but don't do anything yet.
+            has_unknown = true;
         }
         current_parameter++;
     }
+
+    current_parameter = parameters;
+    while (has_unknown && current_parameter->key != NULL) {
+        bool is_valid = false;
+        for (const char** parameter = (const char**)(&valid_parameters._first + 1);
+             parameter < &valid_parameters._last;
+             ++parameter) {
+            if (strcmp(current_parameter->key, *parameter) == 0) {
+                is_valid = true;
+                break;
+            }
+        }
+        if (!is_valid) {
+            PRINT_LOG_MESSAGE(
+                inout_state->log_warning,
+                "Unknown parameter name: %s",
+                current_parameter->key);
+        }
+        current_parameter++;
+    }
+
     return LOADAVGWATCH_OK;
 }
 
