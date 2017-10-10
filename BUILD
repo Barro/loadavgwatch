@@ -22,6 +22,6 @@ cc_library(
 
 cc_binary(
     name = "loadavgwatch",
-    srcs = ["main.c"],
+    srcs = ["main.c", "main-linux.c", "main-impl.h"],
     deps = [":libloadavgwatch"],
 )

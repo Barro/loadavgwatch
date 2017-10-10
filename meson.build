@@ -16,4 +16,4 @@
 
 project('loadavgwatch', 'c')
 lib = static_library('loadavgwatch', 'loadavgwatch.c')
-executable('loadavgwatch', 'main.c', link_with : lib)
+executable('loadavgwatch', 'main.c', 'main-linux.c', link_with : lib)

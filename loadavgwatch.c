@@ -110,6 +110,8 @@ static loadavgwatch_status read_parameters(
         .stop_load = "stop-load",
     };
     bool has_unknown = false;
+    loadavgwatch_status return_status = LOADAVGWATCH_OK;
+    const char* invalid_parameter_name = NULL;
     while (current_parameter->key != NULL) {
         if (strcmp(current_parameter->key, valid_parameters.log_info) == 0) {
             inout_state->log_info = *(
@@ -125,7 +127,9 @@ static loadavgwatch_status read_parameters(
             char* endptr = NULL;
             float start_load = strtof(load_value, &endptr);
             if (endptr == current_parameter->value) {
-                return LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                invalid_parameter_name = current_parameter->key;
+                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                continue;
             }
             inout_state->start_load = start_load;
         } else if (strcmp(current_parameter->key, valid_parameters.stop_load) == 0) {
@@ -133,7 +137,9 @@ static loadavgwatch_status read_parameters(
             char* endptr = NULL;
             float stop_load = strtof(load_value, &endptr);
             if (endptr == current_parameter->value) {
-                return LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                invalid_parameter_name = current_parameter->key;
+                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                continue;
             }
             inout_state->stop_load = stop_load;
         } else {
@@ -142,6 +148,17 @@ static loadavgwatch_status read_parameters(
             has_unknown = true;
         }
         current_parameter++;
+    }
+
+    // Here we should have alternative loggers in use if standard
+    // error logging has been overwritten:
+    if (return_status == LOADAVGWATCH_ERR_INVALID_PARAMETER) {
+        assert(invalid_parameter_name != NULL);
+        PRINT_LOG_MESSAGE(
+            inout_state->log_error,
+            "Value for parameter %s was invalid!",
+            invalid_parameter_name);
+        return return_status;
     }
 
     current_parameter = parameters;

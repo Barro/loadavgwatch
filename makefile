@@ -19,5 +19,5 @@ default: build-make/loadavgwatch
 build-make/:
 	mkdir build-make
 
-build-make/loadavgwatch: build-make/ loadavgwatch.c main.c
-	$(CC) -g3 -I. --std=c99 -o build-make/loadavgwatch main.c loadavgwatch.c
+build-make/loadavgwatch: build-make/ loadavgwatch.c main.c main-linux.c
+	$(CC) -g3 -I. --std=c99 -o build-make/loadavgwatch main.c loadavgwatch.c main-linux.c

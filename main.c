@@ -22,53 +22,12 @@
 #define _C99_SOURCE
 
 #include "loadavgwatch.h"
+#include "main-impl.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <stdbool.h>
 #include <string.h>
-
-/**
- * Parses Linux /proc/cpuinfo file for the number of CPUs
- */
-static long get_ncpus_proc_cpuinfo(const char* path)
-{
-    FILE* cpuinfo_fp = fopen(path, "r");
-    if (!cpuinfo_fp) {
-        return -1;
-    }
-    char line_buffer[1024];
-    long ncpus = 0;
-    while (fgets(line_buffer, sizeof(line_buffer), cpuinfo_fp)) {
-        char* processor_position = strstr(line_buffer, "processor");
-        if (processor_position != line_buffer) {
-            continue;
-        }
-        // Make sure that "processor" is the full word on the line:
-        if (!(line_buffer[sizeof("processor") - 1] == ' '
-              || line_buffer[sizeof("processor") - 1] == '\t'
-              || line_buffer[sizeof("processor") - 1] == ':')) {
-            continue;
-        }
-        char* colon_position = strstr(line_buffer, ":");
-        if (colon_position == NULL) {
-            continue;
-        }
-        // We have a line that has processor in the beginning and
-        // colon somewhere in it. Register it as a new CPU.
-        ncpus++;
-    }
-    fclose(cpuinfo_fp);
-    return ncpus;
-}
-
-/**
- * Parses Linux /sys/devices/system/cpu/online file for the number of CPUs
- */
-static long get_ncpus_sys_devices(const char* path)
-{
-    return -1;
-}
 
 static void log_info(const char* message, void* stream)
 {
@@ -101,17 +60,7 @@ int main(int argc, char* argv[])
         {NULL, NULL}
     };
 
-    long ncpus_list[] = {
-        get_ncpus_proc_cpuinfo("/proc/cpuinfo"),
-        get_ncpus_sys_devices("/sys/devices/system/cpu/online"),
-    };
-    long ncpus = -1;
-    for (size_t i = 0; i < sizeof(ncpus_list) / sizeof(ncpus_list[0]); ++i) {
-        if (ncpus_list[i] > ncpus) {
-            ncpus = ncpus_list[i];
-        }
-    }
-
+    long ncpus = get_ncpus();
     if (ncpus > 0) {
         snprintf(start_load, sizeof(start_load), "%0.2f", (float)(ncpus - 1) + 0.02);
         snprintf(stop_load, sizeof(stop_load), "%0.2f", (float)(ncpus) + 0.12);
