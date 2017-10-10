@@ -20,4 +20,4 @@ build-make/:
 	mkdir build-make
 
 build-make/loadavgwatch: build-make/ loadavgwatch.c main.c
-	$(CC) -I. --std=c99 -o build-make/loadavgwatch main.c loadavgwatch.c
+	$(CC) -g3 -I. --std=c99 -o build-make/loadavgwatch main.c loadavgwatch.c
