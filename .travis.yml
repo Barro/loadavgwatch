@@ -4,10 +4,12 @@ os:
   - linux
   - osx
 
+osx_image: xcode9.1
+
 compiler:
   - gcc
   - clang
 
-install: make
+install: true
 
 script: make
