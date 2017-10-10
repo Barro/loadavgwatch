@@ -117,7 +117,7 @@ int main(int argc, char* argv[])
             "Could not detect the number of CPUs. "
             "Using the default load values for 1 CPU! "
             "Please set load limits manually!",
-            NULL);
+            stderr);
     }
     loadavgwatch_state* state;
     if (loadavgwatch_open(parameters, &state) != 0) {
