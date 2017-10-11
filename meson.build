@@ -14,6 +14,17 @@
 # You should have received a copy of the GNU General Public License
 # along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
 
-project('loadavgwatch', 'c')
-lib = static_library('loadavgwatch', 'loadavgwatch.c')
-executable('loadavgwatch', 'main.c', 'main-linux.c', link_with : lib)
+project('loadavgwatch', 'c', default_options : ['c_std=c99'])
+
+executable_files = ['main.c']
+library_files = ['loadavgwatch.c']
+if target_machine.system() == 'linux'
+    executable_files += 'main-linux.c'
+    library_files += 'loadavgwatch-linux.c'
+elif target_machine.system() == 'darwin'
+    executable_files += 'main-darwin.c'
+    library_files += 'loadavgwatch-darwin.c'
+endif
+
+lib = static_library('loadavgwatch', library_files)
+executable('loadavgwatch', executable_files, link_with : lib)

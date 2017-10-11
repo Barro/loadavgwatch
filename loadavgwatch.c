@@ -23,44 +23,11 @@
 
 #include <assert.h>
 #include "loadavgwatch.h"
+#include "loadavgwatch-impl.h"
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-
-#define PRINT_LOG_MESSAGE(log_object, ...) \
-    { \
-        char log_buffer[256] = {0}; \
-        snprintf(log_buffer, sizeof(log_buffer), __VA_ARGS__); \
-        (log_object).log(log_buffer, (log_object).data); \
-    }
-
-typedef int(*clock_callback)(clockid_t clk_id, struct timespec* tp);
-
-struct _loadavgwatch_state
-{
-    float last_load_average;
-    float start_load;
-    float stop_load;
-
-    struct timespec last_poll;
-    struct timespec last_start_time;
-    struct timespec last_stop_time;
-
-    struct timespec minimum_quiet_period;
-
-    struct timespec start_interval;
-    struct timespec stop_interval;
-
-    clock_callback clock;
-
-    loadavgwatch_log_object log_info;
-    loadavgwatch_log_object log_error;
-    loadavgwatch_log_object log_warning;
-
-    FILE* loadavg_fp;
-};
 
 static void log_null(
     const char* message __attribute__((unused)),
@@ -71,22 +38,6 @@ static void log_null(
 static void log_stderr(const char* message, void* data __attribute__((unused)))
 {
     fprintf(stderr, "%s\n", message);
-}
-
-static loadavgwatch_status get_load_average(
-    loadavgwatch_state* state, float* out_loadavg)
-{
-    char read_buffer[128];
-    char* line_buffer = fgets(read_buffer, sizeof(read_buffer), state->loadavg_fp);
-    fseek(state->loadavg_fp, 0, SEEK_SET);
-    if (line_buffer == NULL) {
-        return LOADAVGWATCH_ERR_READ;
-    }
-    int read_result = sscanf(read_buffer, "%f", out_loadavg);
-    if (read_result != 1) {
-        return LOADAVGWATCH_ERR_PARSE;
-    }
-    return LOADAVGWATCH_OK;
 }
 
 static loadavgwatch_status read_parameters(
@@ -209,15 +160,13 @@ loadavgwatch_status loadavgwatch_open(
         }
     }
 
-    FILE* loadavg_fp = fopen("/proc/loadavg", "r");
-    if (loadavg_fp == NULL) {
-        state->log_error.log(
-            "Unable to open /proc/loadavg for reading!",
-            state->log_error.data);
-        free(state);
-        return LOADAVGWATCH_ERR_INIT;
+    void* impl_state = NULL;
+    loadavgwatch_status impl_open_result = loadavgwatch_impl_open(state, &impl_state);
+    if (impl_open_result != LOADAVGWATCH_OK) {
+        return impl_open_result;
     }
-    state->loadavg_fp = loadavg_fp;
+    state->impl_state = impl_state;
+
     *out_state = state;
     return LOADAVGWATCH_OK;
 }
@@ -227,7 +176,8 @@ loadavgwatch_status loadavgwatch_close(loadavgwatch_state** state)
     if (*state == NULL) {
         return LOADAVGWATCH_OK;
     }
-    fclose((*state)->loadavg_fp);
+    loadavgwatch_impl_close((*state)->impl_state);
+    memset((*state), 0, sizeof(loadavgwatch_state));
     free(*state);
     *state = NULL;
     return LOADAVGWATCH_OK;
@@ -238,7 +188,8 @@ loadavgwatch_status loadavgwatch_poll(
 {
     assert(state != NULL && "Used uninitialized library! loadavgwatch_open() error codes!");
     float load_average;
-    loadavgwatch_status read_status = get_load_average(state, &load_average);
+    loadavgwatch_status read_status = loadavgwatch_impl_get_load_average(
+        state->impl_state, &load_average);
     if (read_status != LOADAVGWATCH_OK) {
         return read_status;
     }
