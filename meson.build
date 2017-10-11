@@ -24,6 +24,9 @@ if target_machine.system() == 'linux'
 elif target_machine.system() == 'darwin'
     executable_files += 'main-darwin.c'
     library_files += 'loadavgwatch-darwin.c'
+elif target_machine.system() == 'bsd'
+    executable_files += 'main-bsd.c'
+    library_files += 'loadavgwatch-bsd.c'
 endif
 
 lib = static_library('loadavgwatch', library_files)
