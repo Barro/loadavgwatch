@@ -105,12 +105,19 @@ static long get_ncpus_sys_devices(const char* path)
 static long get_ncpus_sysconf(void)
 {
 #ifdef _SC_NPROCESSORS_ONLN
-    return sysconf(_SC_NPROCESSORS_ONLN);
-#else // #ifdef _SC_NPROCESSORS_ONLN
-    return -1;
+    long cpus_online = sysconf(_SC_NPROCESSORS_ONLN);
+    if (cpus_online > 0) {
+        return cpus_online;
+    }
 #endif // #ifdef _SC_NPROCESSORS_ONLN
+#ifdef _SC_NPROCESSORS_CONF
+    long cpus_configured = sysconf(_SC_NPROCESSORS_CONF);
+    if (cpus_configured > 0) {
+        return cpus_configured;
+    }
+#endif // #ifdef _SC_NPROCESSORS_CONF
+    return -1;
 }
-
 
 long get_ncpus(void)
 {
