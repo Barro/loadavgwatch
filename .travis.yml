@@ -4,13 +4,18 @@ os:
   - linux
   - osx
 
+addons:
+  apt:
+    packages:
+      - python3-pip
+      - wget
+
 sudo: required
 before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -qq python3-pip wget
-  - sudo pip3 install meson
-  - wget https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -O "$TRAVIS_BUILD_DIR"/ninja-linux.zip
-  - sudo unzip -d /usr/bin/ "$TRAVIS_BUILD_DIR"/ninja-linux.zip
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo pip3 install meson; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -O "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo unzip -d /usr/bin/ "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install meson; fi
 
 osx_image: xcode9.1
 
