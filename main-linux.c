@@ -24,6 +24,7 @@
 #include "main-impl.h"
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 
 /**
  * Parses Linux /proc/cpuinfo file for the number of CPUs
@@ -101,6 +102,16 @@ static long get_ncpus_sys_devices(const char* path)
     return ncpus;
 }
 
+static long get_ncpus_sysconf(void)
+{
+#ifdef _SC_NPROCESSORS_ONLN
+    return sysconf(_SC_NPROCESSORS_ONLN);
+#else // #ifdef _SC_NPROCESSORS_ONLN
+    return -1;
+#endif // #ifdef _SC_NPROCESSORS_ONLN
+}
+
+
 long get_ncpus(void)
 {
     // It's possible that neither /proc/ nor /sys/ are mounted. It can
@@ -109,7 +120,7 @@ long get_ncpus(void)
     long ncpus_list[] = {
         get_ncpus_proc_cpuinfo("/proc/cpuinfo"),
         get_ncpus_sys_devices("/sys/devices/system/cpu/online"),
-        get_ncpus_sys_devices("/tmp/cpus.txt"),
+        get_ncpus_sysconf(),
     };
 
     long ncpus = -1;
