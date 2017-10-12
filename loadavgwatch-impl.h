@@ -24,6 +24,7 @@ extern "C" {
 #endif // #ifdef __cplusplus
 
 #include "loadavgwatch.h"
+#include <stdio.h>
 #include <time.h>
 
 #define PRINT_LOG_MESSAGE(log_object, ...)      \
