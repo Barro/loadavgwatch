@@ -15,7 +15,7 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo pip3 install meson; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -O "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo unzip -d /usr/bin/ "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install meson; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install meson; fi
 
 osx_image: xcode9.1
 
