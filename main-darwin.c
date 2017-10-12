@@ -16,9 +16,22 @@
  * along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <errno.h>
 #include "main-impl.h"
+#include <sys/sysctl.h>
 
 long get_ncpus(void)
 {
-    return 1;
+    int mib[2] = {CTL_HW, HW_NCPU};
+    size_t len = sizeof(mib) / sizeof(mib[0]);
+    int ncpus;
+    size_t cpus_size = sizeof(ncpus);
+    int read_result = sysctl(mib, len, &ncpus, &cpus_size, NULL, 0);
+    if (read_result == ENOMEM) {
+        return 0;
+    }
+    if (read_result != 0) {
+        return 0;
+    }
+    return ncpus;
 }

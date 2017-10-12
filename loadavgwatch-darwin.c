@@ -18,7 +18,6 @@
 
 #include <errno.h>
 #include "loadavgwatch-impl.h"
-#include <sys/types.h>
 #include <sys/sysctl.h>
 
 loadavgwatch_status loadavgwatch_impl_open(
