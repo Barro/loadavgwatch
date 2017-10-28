@@ -21,6 +21,7 @@ cc_library(
          ":darwin_mode": ["loadavgwatch-darwin.c"]
     }),
     hdrs = ["loadavgwatch.h", "loadavgwatch-impl.h"],
+    copts = ["--std=c99"],
 )
 cc_binary(
     name = "loadavgwatch",
@@ -29,6 +30,7 @@ cc_binary(
          ":darwin_mode": ["main-darwin.c"]
     }),
     deps = [":libloadavgwatch"],
+    copts = ["--std=c99"],
 )
 config_setting(
     name = "linux_mode",

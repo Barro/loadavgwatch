@@ -10,12 +10,18 @@ addons:
       - python3-pip
       - wget
 
+env:
+  global:
+    - BAZEL_VERSION: "0.7.0"
+
 sudo: required
 before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo pip3 install meson; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -O "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo unzip -d /usr/bin/ "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install meson; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://github.com/bazelbuild/bazel/releases/download/"${BAZEL_VERSION}"/bazel_"${BAZEL_VERSION}"-linux-x86_64.deb; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo dpkg -i bazel_"${BAZEL_VERSION}"-linux-x86_64.deb; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install meson bazel; fi
 
 osx_image: xcode9.1
 
@@ -25,4 +31,4 @@ compiler:
 
 install: true
 
-script: meson build-meson && ninja -C build-meson
+script: meson build-meson && ninja -C build-meson && bazel build ...:all
