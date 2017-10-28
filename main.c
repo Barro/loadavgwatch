@@ -23,11 +23,13 @@
 
 #include "loadavgwatch.h"
 #include "main-impl.h"
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <stdbool.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 static void log_info(const char* message, void* stream)
 {
@@ -42,6 +44,23 @@ static void log_warning(const char* message, void* stream)
 static void log_error(const char* message, void* stream)
 {
     fprintf((FILE*)stream, "ERROR: %s\n", message);
+}
+
+static unsigned g_child_execution_warning_timeout;
+static const char* g_child_action;
+
+static void
+alarm_handler(int sig, siginfo_t* info, void* ucontext)
+{
+    static char warning_message[256];
+    snprintf(
+        warning_message,
+        sizeof(warning_message),
+        "Process for %s action took more that %u seconds to execute! "
+        "You might want to see the README for hints for using this program.",
+        g_child_action,
+        g_child_execution_warning_timeout);
+    log_warning(warning_message, stderr);
 }
 
 int main(int argc, char* argv[])
@@ -81,12 +100,38 @@ int main(int argc, char* argv[])
         .tv_nsec = 0
     };
 
+    struct sigaction alarm_action = {
+        .sa_sigaction = alarm_handler,
+    };
+    sigaction(SIGALRM, &alarm_action, NULL);
+
+    const char start_script[] = "sleep 15";
+    const char stop_script[] = "sleep 15";
     while (true) {
         loadavgwatch_poll_result poll_result;
         if (loadavgwatch_poll(state, &poll_result) != 0) {
             abort();
         }
         printf("%u %u\n", poll_result.start_count, poll_result.stop_count);
+        if (poll_result.start_count > 1) {
+            g_child_action = "start";
+            g_child_execution_warning_timeout = 10;
+            alarm(10);
+            int ret = system(start_script);
+            alarm(0);
+            if (ret != EXIT_SUCCESS) {
+                log_warning("Child process exited with non-zero status.", stderr);
+            }
+        } else {
+            g_child_action = "stop";
+            g_child_execution_warning_timeout = 10;
+            alarm(10);
+            int ret = system(stop_script);
+            alarm(0);
+            if (ret != EXIT_SUCCESS) {
+                log_warning("Child process exited with non-zero status.", stderr);
+            }
+        }
         int sleep_return = -1;
         struct timespec sleep_remaining = sleep_time;
         do {
