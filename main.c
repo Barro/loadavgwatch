@@ -79,6 +79,16 @@ int main(int argc, char* argv[])
         {NULL, NULL}
     };
 
+    {
+        char version_info[128];
+        snprintf(
+            version_info,
+            sizeof(version_info),
+            "loadavgwatch 0.0.0 %s",
+            get_system());
+        log_info(version_info, stdout);
+    }
+
     long ncpus = get_ncpus();
     if (ncpus > 0) {
         snprintf(start_load, sizeof(start_load), "%0.2f", (float)(ncpus - 1) + 0.02);

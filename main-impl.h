@@ -20,5 +20,6 @@
 #define LOADAVGWATCH_IMPL_H
 
 long get_ncpus(void);
+const char* get_system(void);
 
 #endif // #ifndef LOADAVGWATCH_H

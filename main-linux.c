@@ -138,3 +138,8 @@ long get_ncpus(void)
     }
     return ncpus;
 }
+
+const char* get_system(void)
+{
+    return "linux";
+}

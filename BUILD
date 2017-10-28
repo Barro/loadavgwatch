@@ -16,12 +16,25 @@
 
 cc_library(
     name = "libloadavgwatch",
-    srcs = ["loadavgwatch.c"],
-    hdrs = ["loadavgwatch.h"],
+    srcs = ["loadavgwatch.c"] + select({
+         ":linux_mode": ["loadavgwatch-linux.c"],
+         ":darwin_mode": ["loadavgwatch-darwin.c"]
+    }),
+    hdrs = ["loadavgwatch.h", "loadavgwatch-impl.h"],
 )
-
 cc_binary(
     name = "loadavgwatch",
-    srcs = ["main.c", "main-linux.c", "main-impl.h"],
+    srcs = ["main.c", "main-impl.h"] + select({
+         ":linux_mode": ["main-linux.c"],
+         ":darwin_mode": ["main-darwin.c"]
+    }),
     deps = [":libloadavgwatch"],
+)
+config_setting(
+    name = "linux_mode",
+    values = { "cpu": "k8" }
+)
+config_setting(
+    name = "darwin_mode",
+    values = { "cpu": "darwin" }
 )
