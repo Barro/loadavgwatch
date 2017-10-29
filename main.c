@@ -31,6 +31,15 @@
 #include <time.h>
 #include <unistd.h>
 
+typedef struct program_options
+{
+    char* start_load;
+    char* stop_load;
+    char* cooldown_minutes;
+    char* start_script;
+    char* stop_script;
+} program_options;
+
 static void log_info(const char* message, void* stream)
 {
     fprintf((FILE*)stream, "%s\n", message);

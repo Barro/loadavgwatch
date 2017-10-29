@@ -34,7 +34,11 @@ extern "C" {
         (log_object).log(log_buffer, (log_object).data); \
     }
 
-typedef int(*clock_callback)(clockid_t clk_id, struct timespec* tp);
+// Used for test related dependency injection:
+typedef int(*impl_clock)(clockid_t clk_id, struct timespec* tp);
+typedef loadavgwatch_status(*impl_open)(const loadavgwatch_state* state, void** out_impl_state);
+typedef loadavgwatch_status(*impl_close)(void* impl_state);
+typedef loadavgwatch_status(*impl_get_load_average)(void* impl_state, float* out_loadavg);
 
 struct _loadavgwatch_state
 {
@@ -51,20 +55,23 @@ struct _loadavgwatch_state
     struct timespec start_interval;
     struct timespec stop_interval;
 
-    clock_callback clock;
-
     loadavgwatch_log_object log_info;
     loadavgwatch_log_object log_error;
     loadavgwatch_log_object log_warning;
+
+    impl_clock impl_clock;
+    impl_open impl_open;
+    impl_close impl_close;
+    impl_get_load_average impl_get_load_average;
 
     void* impl_state;
 };
 
 loadavgwatch_status loadavgwatch_impl_open(
     const loadavgwatch_state* state, void** out_impl_state);
-loadavgwatch_status loadavgwatch_impl_close(void* state);
+loadavgwatch_status loadavgwatch_impl_close(void* impl_state);
 loadavgwatch_status loadavgwatch_impl_get_load_average(
-    void* state, float* out_loadavg);
+    void* impl_state, float* out_loadavg);
 
 #ifdef __cplusplus
 }

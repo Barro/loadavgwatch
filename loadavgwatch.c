@@ -52,6 +52,10 @@ static loadavgwatch_status read_parameters(
         const char* log_error;
         const char* start_load;
         const char* stop_load;
+        const char* impl_clock;
+        const char* impl_open;
+        const char* impl_close;
+        const char* impl_get_load_average;
         const char* _last;
     } valid_parameters = {
         .log_info = "log-info",
@@ -59,6 +63,12 @@ static loadavgwatch_status read_parameters(
         .log_error = "log-error",
         .start_load = "start-load",
         .stop_load = "stop-load",
+
+        // Used for testing:
+        .impl_clock = "impl-clock",
+        .impl_open = "impl-open",
+        .impl_close = "impl-close",
+        .impl_get_load_average = "impl-get-load-average",
     };
     bool has_unknown = false;
     loadavgwatch_status return_status = LOADAVGWATCH_OK;
@@ -93,6 +103,15 @@ static loadavgwatch_status read_parameters(
                 continue;
             }
             inout_state->stop_load = stop_load;
+        } else if (strcmp(current_parameter->key, valid_parameters.impl_clock) == 0) {
+            inout_state->impl_clock = *((impl_clock*)current_parameter->value);
+        } else if (strcmp(current_parameter->key, valid_parameters.impl_open) == 0) {
+            inout_state->impl_open = *((impl_open*)current_parameter->value);
+        } else if (strcmp(current_parameter->key, valid_parameters.impl_close) == 0) {
+            inout_state->impl_close = *((impl_close*)current_parameter->value);
+        } else if (strcmp(current_parameter->key, valid_parameters.impl_get_load_average) == 0) {
+            inout_state->impl_get_load_average = *(
+                (impl_get_load_average*)current_parameter->value);
         } else {
             // We haven't initialized the logger yet. Register the
             // problem, but don't do anything yet.
@@ -147,10 +166,15 @@ loadavgwatch_status loadavgwatch_open(
 
     // Set some defaults that can be overridden by either the using
     // application or test programs:
-    state->clock = clock_gettime;
     state->log_info.log = log_null;
     state->log_error.log = log_stderr;
     state->log_warning.log = log_stderr;
+
+    // Defaults that mainly tests should be interested in overwriting:
+    state->impl_clock = clock_gettime;
+    state->impl_open = loadavgwatch_impl_open;
+    state->impl_close = loadavgwatch_impl_close;
+    state->impl_get_load_average = loadavgwatch_impl_get_load_average;
 
     if (parameters != NULL) {
         int parameters_result = read_parameters(parameters, state);
