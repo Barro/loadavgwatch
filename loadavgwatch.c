@@ -52,6 +52,9 @@ static loadavgwatch_status read_parameters(
         const char* log_error;
         const char* start_load;
         const char* stop_load;
+        const char* quiet_period;
+        const char* start_interval;
+        const char* stop_interval;
         const char* impl_clock;
         const char* impl_open;
         const char* impl_close;
@@ -61,8 +64,13 @@ static loadavgwatch_status read_parameters(
         .log_info = "log-info",
         .log_warning = "log-warning",
         .log_error = "log-error",
+
         .start_load = "start-load",
         .stop_load = "stop-load",
+
+        .quiet_period = "quiet-period",
+        .start_interval = "start-interval",
+        .stop_interval = "stop-interval",
 
         // Used for testing:
         .impl_clock = "impl-clock",
@@ -103,6 +111,15 @@ static loadavgwatch_status read_parameters(
                 continue;
             }
             inout_state->stop_load = stop_load;
+        } else if (strcmp(current_parameter->key, valid_parameters.quiet_period) == 0) {
+            inout_state->quiet_period = *(
+                (struct timespec*)current_parameter->value);
+        } else if (strcmp(current_parameter->key, valid_parameters.start_interval) == 0) {
+            inout_state->start_interval = *(
+                (struct timespec*)current_parameter->value);
+        } else if (strcmp(current_parameter->key, valid_parameters.stop_interval) == 0) {
+            inout_state->stop_interval = *(
+                (struct timespec*)current_parameter->value);
         } else if (strcmp(current_parameter->key, valid_parameters.impl_clock) == 0) {
             inout_state->impl_clock = *((impl_clock*)current_parameter->value);
         } else if (strcmp(current_parameter->key, valid_parameters.impl_open) == 0) {
@@ -169,6 +186,25 @@ loadavgwatch_status loadavgwatch_open(
     state->log_info.log = log_null;
     state->log_error.log = log_stderr;
     state->log_warning.log = log_stderr;
+
+    // Calling program will likely want to overwrite these as these
+    // are really machine specific:
+    state->start_load = 0.02;
+    state->stop_load = 1.12;
+
+    // Default values for program starting/stopping related times:
+    state->quiet_period = (struct timespec){
+        .tv_sec = 60 * 60,
+        .tv_nsec = 0
+    };
+    state->start_interval = (struct timespec){
+        .tv_sec = 60 + 10,
+        .tv_nsec = 0
+    };
+    state->stop_interval = (struct timespec){
+        .tv_sec = 2 * 60,
+        .tv_nsec = 0
+    };
 
     // Defaults that mainly tests should be interested in overwriting:
     state->impl_clock = clock_gettime;

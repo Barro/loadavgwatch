@@ -50,8 +50,7 @@ struct _loadavgwatch_state
     struct timespec last_start_time;
     struct timespec last_stop_time;
 
-    struct timespec minimum_quiet_period;
-
+    struct timespec quiet_period;
     struct timespec start_interval;
     struct timespec stop_interval;
 
