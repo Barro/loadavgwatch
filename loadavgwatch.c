@@ -80,17 +80,17 @@ static bool check_for_unknown_parameters(
     const loadavgwatch_parameter* current_parameter = parameters;
     bool all_valid = true;
     while (current_parameter->key != NULL) {
-        bool current_valid = true;
+        bool current_valid = false;
         for (const char* const* parameter = &VALID_PARAMETERS._first + 1;
              parameter < &VALID_PARAMETERS._last;
              ++parameter) {
             if (strcmp(current_parameter->key, *parameter) == 0) {
-                current_valid = false;
-                all_valid = false;
+                current_valid = true;
                 break;
             }
         }
         if (!current_valid) {
+            all_valid = false;
             PRINT_LOG_MESSAGE(
                 state->log_warning,
                 "Unknown parameter name: %s",

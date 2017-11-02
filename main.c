@@ -74,20 +74,6 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
 
 int main(int argc, char* argv[])
 {
-    loadavgwatch_log_object log_info_callback = {log_info, stdout};
-    loadavgwatch_log_object log_warning_callback = {log_warning, stderr};
-    loadavgwatch_log_object log_error_callback = {log_error, stderr};
-    char start_load[sizeof("2147483648.00")] = "0.02";
-    char stop_load[sizeof("2147483648.00")] = "1.12";
-    loadavgwatch_parameter parameters[] = {
-        {"log-info", &log_info_callback},
-        {"log-warning", &log_warning_callback},
-        {"log-error", &log_error_callback},
-        {"start-load", start_load},
-        {"stop-load", stop_load},
-        {NULL, NULL}
-    };
-
     {
         char version_info[128];
         snprintf(
@@ -98,6 +84,8 @@ int main(int argc, char* argv[])
         log_info(version_info, stdout);
     }
 
+    char start_load[sizeof("2147483648.00")] = "";
+    char stop_load[sizeof("2147483648.00")] = "";
     long ncpus = get_ncpus();
     if (ncpus > 0) {
         snprintf(start_load, sizeof(start_load), "%0.2f", (float)(ncpus - 1) + 0.02);
@@ -109,10 +97,45 @@ int main(int argc, char* argv[])
             "Please set load limits manually!",
             stderr);
     }
+
+    loadavgwatch_log_object log_info_callback = {log_info, stdout};
+    loadavgwatch_log_object log_warning_callback = {log_warning, stderr};
+    loadavgwatch_log_object log_error_callback = {log_error, stderr};
+    loadavgwatch_parameter init_parameters[] = {
+        {"log-info", &log_info_callback},
+        {"log-warning", &log_warning_callback},
+        {"log-error", &log_error_callback},
+        {"start-load", start_load},
+        {"stop-load", stop_load},
+        {NULL, NULL}
+    };
     loadavgwatch_state* state;
-    if (loadavgwatch_open(parameters, &state) != 0) {
+    if (loadavgwatch_open(init_parameters, &state) != 0) {
         abort();
     }
+    union {
+        loadavgwatch_parameter array[4];
+        struct {
+            loadavgwatch_parameter quiet_period;
+            loadavgwatch_parameter start_interval;
+            loadavgwatch_parameter stop_interval;
+            loadavgwatch_parameter _end;
+        } s;
+    } defaults = {
+        .s.quiet_period = {"quiet-period", NULL},
+        .s.start_interval = {"start-interval", NULL},
+        .s.stop_interval = {"stop-interval", NULL},
+        .s._end = {NULL, NULL}
+    };
+    loadavgwatch_parameters_get(state, defaults.array);
+    printf("start-load: %s\n", start_load);
+    printf("stop-load: %s\n", stop_load);
+    printf("quiet-period: %0.2f min\n",
+           ((struct timespec*)defaults.s.quiet_period.value)->tv_sec / 60.0);
+    printf("start-interval: %0.2f min\n",
+           ((struct timespec*)defaults.s.start_interval.value)->tv_sec / 60.0);
+    printf("stop-interval: %0.2f min\n",
+           ((struct timespec*)defaults.s.stop_interval.value)->tv_sec / 60.0);
 
     struct timespec sleep_time = {
         .tv_sec = 5,
