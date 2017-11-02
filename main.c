@@ -74,17 +74,17 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
 
 int main(int argc, char* argv[])
 {
-    char start_load[sizeof("2147483648.00")] = "0.02";
-    char stop_load[sizeof("2147483648.00")] = "1.12";
     loadavgwatch_log_object log_info_callback = {log_info, stdout};
     loadavgwatch_log_object log_warning_callback = {log_warning, stderr};
     loadavgwatch_log_object log_error_callback = {log_error, stderr};
-    loadavgwatch_init_parameter parameters[] = {
-        {"start-load", start_load},
-        {"stop-load", stop_load},
+    char start_load[sizeof("2147483648.00")] = "0.02";
+    char stop_load[sizeof("2147483648.00")] = "1.12";
+    loadavgwatch_parameter parameters[] = {
         {"log-info", &log_info_callback},
         {"log-warning", &log_warning_callback},
         {"log-error", &log_error_callback},
+        {"start-load", start_load},
+        {"stop-load", stop_load},
         {NULL, NULL}
     };
 

@@ -43,8 +43,12 @@ typedef loadavgwatch_status(*impl_get_load_average)(void* impl_state, float* out
 struct _loadavgwatch_state
 {
     float last_load_average;
+
     float start_load;
     float stop_load;
+
+    char start_load_str[sizeof("2147483648.00")];
+    char stop_load_str[sizeof("2147483648.00")];
 
     struct timespec last_poll;
     struct timespec last_start_time;

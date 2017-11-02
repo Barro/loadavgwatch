@@ -38,11 +38,11 @@ typedef enum loadavgwatch_status
 
 typedef struct _loadavgwatch_state loadavgwatch_state;
 
-typedef struct loadavgwatch_init_parameter
+typedef struct loadavgwatch_parameter
 {
     const char* key;
     void* value;
-} loadavgwatch_init_parameter;
+} loadavgwatch_parameter;
 
 typedef struct loadavgwatch_poll_result
 {
@@ -57,8 +57,11 @@ typedef struct loadavgwatch_log_object
 } loadavgwatch_log_object;
 
 loadavgwatch_status loadavgwatch_open(
-    const loadavgwatch_init_parameter* parameters,
-    loadavgwatch_state** out_state);
+    loadavgwatch_parameter* parameters, loadavgwatch_state** out_state);
+loadavgwatch_status loadavgwatch_parameters_get(
+    loadavgwatch_state* state, loadavgwatch_parameter* inout_parameters);
+loadavgwatch_status loadavgwatch_parameters_set(
+    loadavgwatch_state* inout_state, loadavgwatch_parameter* parameters);
 loadavgwatch_status loadavgwatch_close(loadavgwatch_state** state);
 loadavgwatch_status loadavgwatch_poll(
     loadavgwatch_state* state, loadavgwatch_poll_result* result);
