@@ -22,7 +22,6 @@
 #define _C99_SOURCE
 
 #include "loadavgwatch.h"
-#include "main-impl.h"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,27 +74,6 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
 int main(int argc, char* argv[])
 {
     {
-        char version_info[128];
-        snprintf(
-            version_info,
-            sizeof(version_info),
-            "loadavgwatch 0.0.0 %s",
-            get_system());
-        log_info(version_info, stdout);
-    }
-
-    char start_load[sizeof("2147483648.00")] = "";
-    char stop_load[sizeof("2147483648.00")] = "";
-    long ncpus = get_ncpus();
-    if (ncpus > 0) {
-        snprintf(start_load, sizeof(start_load), "%0.2f", (float)(ncpus - 1) + 0.02);
-        snprintf(stop_load, sizeof(stop_load), "%0.2f", (float)(ncpus) + 0.12);
-    } else {
-        log_warning(
-            "Could not detect the number of CPUs. "
-            "Using the default load values for 1 CPU! "
-            "Please set load limits manually!",
-            stderr);
     }
 
     loadavgwatch_log_object log_info_callback = {log_info, stdout};
@@ -105,8 +83,6 @@ int main(int argc, char* argv[])
         {"log-info", &log_info_callback},
         {"log-warning", &log_warning_callback},
         {"log-error", &log_error_callback},
-        {"start-load", start_load},
-        {"stop-load", stop_load},
         {NULL, NULL}
     };
     loadavgwatch_state* state;
@@ -114,28 +90,45 @@ int main(int argc, char* argv[])
         abort();
     }
     union {
-        loadavgwatch_parameter array[4];
-        struct {
+        struct _defaults {
+            loadavgwatch_parameter system;
+            loadavgwatch_parameter start_load;
+            loadavgwatch_parameter stop_load;
             loadavgwatch_parameter quiet_period;
             loadavgwatch_parameter start_interval;
             loadavgwatch_parameter stop_interval;
             loadavgwatch_parameter _end;
         } s;
+        loadavgwatch_parameter array[
+            sizeof(struct _defaults) / sizeof(((struct _defaults*)0)->_end)];
     } defaults = {
+        .s.system = {"system", NULL},
+        .s.start_load = {"start-load", NULL},
+        .s.stop_load = {"stop-load", NULL},
         .s.quiet_period = {"quiet-period", NULL},
         .s.start_interval = {"start-interval", NULL},
         .s.stop_interval = {"stop-interval", NULL},
         .s._end = {NULL, NULL}
     };
-    loadavgwatch_parameters_get(state, defaults.array);
-    printf("start-load: %s\n", start_load);
-    printf("stop-load: %s\n", stop_load);
+    if (loadavgwatch_parameters_get(state, defaults.array) != LOADAVGWATCH_OK) {
+        log_error("Failed to get the default parameter values", stderr);
+        return EXIT_FAILURE;
+    }
+
+    char info[128];
+    snprintf(
+        info, sizeof(info),
+        "loadavgwatch 0.0.0 %s", (const char*)defaults.s.system.value);
+    log_info(info, stdout);
+
+    printf("start-load: %s\n", (const char*)defaults.s.start_load.value);
+    printf("stop-load: %s\n", (const char*)defaults.s.stop_load.value);
     printf("quiet-period: %0.2f min\n",
-           ((struct timespec*)defaults.s.quiet_period.value)->tv_sec / 60.0);
+           ((const struct timespec*)defaults.s.quiet_period.value)->tv_sec / 60.0);
     printf("start-interval: %0.2f min\n",
-           ((struct timespec*)defaults.s.start_interval.value)->tv_sec / 60.0);
+           ((const struct timespec*)defaults.s.start_interval.value)->tv_sec / 60.0);
     printf("stop-interval: %0.2f min\n",
-           ((struct timespec*)defaults.s.stop_interval.value)->tv_sec / 60.0);
+           ((const struct timespec*)defaults.s.stop_interval.value)->tv_sec / 60.0);
 
     struct timespec sleep_time = {
         .tv_sec = 5,

@@ -1,5 +1,15 @@
 #include "loadavgwatch-impl.h"
 
+const char* loadavgwatch_impl_get_system(void)
+{
+    return "bsd";
+}
+
+long loadavgwatch_impl_get_ncpus(void)
+{
+    return 0;
+}
+
 loadavgwatch_status loadavgwatch_impl_open(
     const loadavgwatch_state* state, void** out_impl_state)
 {

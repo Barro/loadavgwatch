@@ -25,10 +25,7 @@ cc_library(
 )
 cc_binary(
     name = "loadavgwatch",
-    srcs = ["main.c", "main-impl.h"] + select({
-         ":linux_mode": ["main-linux.c"],
-         ":darwin_mode": ["main-darwin.c"]
-    }),
+    srcs = ["main.c"],
     deps = [":libloadavgwatch"],
     copts = ["--std=c99"],
 )

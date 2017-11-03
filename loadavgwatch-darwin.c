@@ -20,6 +20,22 @@
 #include "loadavgwatch-impl.h"
 #include <sys/sysctl.h>
 
+long loadavgwatch_impl_get_ncpus(void)
+{
+    int mib[2] = {CTL_HW, HW_NCPU};
+    size_t len = sizeof(mib) / sizeof(mib[0]);
+    int ncpus;
+    size_t cpus_size = sizeof(ncpus);
+    int read_result = sysctl(mib, len, &ncpus, &cpus_size, NULL, 0);
+    if (read_result == ENOMEM) {
+        return 0;
+    }
+    if (read_result != 0) {
+        return 0;
+    }
+    return ncpus;
+}
+
 loadavgwatch_status loadavgwatch_impl_open(
     const loadavgwatch_state* state, void** out_impl_state)
 {
@@ -55,4 +71,9 @@ loadavgwatch_status loadavgwatch_impl_get_load_average(
     }
     *out_loadavg = (float)load.ldavg[0] / load.fscale;
     return LOADAVGWATCH_OK;
+}
+
+const char* loadavgwatch_impl_get_system(void)
+{
+    return "darwin";
 }

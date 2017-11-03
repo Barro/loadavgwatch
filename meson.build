@@ -19,13 +19,10 @@ project('loadavgwatch', 'c', default_options : ['c_std=c99'])
 executable_files = ['main.c']
 library_files = ['loadavgwatch.c']
 if target_machine.system() == 'linux'
-    executable_files += 'main-linux.c'
     library_files += 'loadavgwatch-linux.c'
 elif target_machine.system() == 'darwin'
-    executable_files += 'main-darwin.c'
     library_files += 'loadavgwatch-darwin.c'
 elif target_machine.system() == 'bsd'
-    executable_files += 'main-bsd.c'
     library_files += 'loadavgwatch-bsd.c'
 endif
 
