@@ -16,10 +16,7 @@
  * along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define _POSIX_C_SOURCE 199309L
-// _POSIX_C_SOURCE disables some of the standard C99 functions on OS
-// X. Define _C99_SOURCE to word around that issue.
-#define _C99_SOURCE
+#define _XOPEN_SOURCE 600
 
 #include "loadavgwatch.h"
 #include <signal.h>
@@ -86,7 +83,23 @@ int main(int argc, char* argv[])
         {NULL, NULL}
     };
     loadavgwatch_state* state;
-    if (loadavgwatch_open(init_parameters, &state) != 0) {
+    loadavgwatch_status open_ret = loadavgwatch_open(init_parameters, &state);
+    switch (open_ret) {
+    case LOADAVGWATCH_ERR_OUT_OF_MEMORY:
+        log_error("Out of memory in library initialization!", stderr);
+        return EXIT_FAILURE;
+    case LOADAVGWATCH_ERR_READ:
+        log_error("Read error in library initialization!", stderr);
+        return EXIT_FAILURE;
+    case LOADAVGWATCH_ERR_INIT:
+        log_error("Library initialization error!", stderr);
+        return EXIT_FAILURE;
+    case LOADAVGWATCH_ERR_INVALID_PARAMETER:
+        log_warning("Invalid parameter for the library!", stderr);
+        break;
+    case LOADAVGWATCH_OK:
+        break;
+    default:
         abort();
     }
     union {

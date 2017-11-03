@@ -18,7 +18,8 @@ cc_library(
     name = "libloadavgwatch",
     srcs = ["loadavgwatch.c"] + select({
          ":linux_mode": ["loadavgwatch-linux.c"],
-         ":darwin_mode": ["loadavgwatch-darwin.c"]
+         ":darwin_mode": ["loadavgwatch-darwin.c", "loadavgwatch-sysctl.c"],
+         ":freebsd_mode": ["loadavgwatch-bsd.c", "loadavgwatch-sysctl.c"],
     }),
     hdrs = ["loadavgwatch.h", "loadavgwatch-impl.h"],
     copts = ["--std=c99"],
@@ -36,4 +37,8 @@ config_setting(
 config_setting(
     name = "darwin_mode",
     values = { "cpu": "darwin" }
+)
+config_setting(
+    name = "freebsd_mode",
+    values = { "cpu": "freebsd" }
 )
