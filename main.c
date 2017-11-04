@@ -18,7 +18,7 @@
 
 #define _XOPEN_SOURCE 600
 
-#include "loadavgwatch.h"
+#include <loadavgwatch.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>

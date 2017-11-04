@@ -15,14 +15,20 @@
 # along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
 
 cc_library(
-    name = "libloadavgwatch",
-    srcs = ["loadavgwatch.c"] + select({
+    name = "libloadavgwatch_impl",
+    srcs = ["loadavgwatch.c", "loadavgwatch-impl.h"] + select({
          ":linux_mode": ["loadavgwatch-linux.c"],
          ":darwin_mode": ["loadavgwatch-darwin.c", "loadavgwatch-sysctl.c"],
          ":freebsd_mode": ["loadavgwatch-bsd.c", "loadavgwatch-sysctl.c"],
     }),
-    hdrs = ["loadavgwatch.h", "loadavgwatch-impl.h"],
+    hdrs = ["loadavgwatch.h"],
     copts = ["--std=c99"],
+    visibility = ["//visibility:private"],
+)
+cc_inc_library(
+    name = "libloadavgwatch",
+    hdrs = ["loadavgwatch.h"],
+    deps = [":libloadavgwatch_impl"],
 )
 cc_binary(
     name = "loadavgwatch",
