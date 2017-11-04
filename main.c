@@ -29,12 +29,24 @@
 
 typedef struct program_options
 {
-    char* start_load;
-    char* stop_load;
-    char* quiet_period_minutes;
-    char* start_script;
-    char* stop_script;
+    // Defaults given by the library:
+    const char* start_load;
+    const char* stop_load;
+    const char* quiet_period;
+    const char* start_interval;
+    const char* stop_interval;
+
+    // These values are used inside main() to do actions:
+    const char* start_script;
+    const char* stop_script;
+    bool dry_run;
 } program_options;
+
+typedef enum setup_options_result {
+    OPTIONS_OK = 0,
+    OPTIONS_HELP = 1,
+    OPTIONS_FAILURE = -1
+} setup_options_result;
 
 static void log_info(const char* message, void* stream)
 {
@@ -68,11 +80,8 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
     log_warning(warning_message, stderr);
 }
 
-int main(int argc, char* argv[])
+static int init_library(loadavgwatch_state** out_state)
 {
-    {
-    }
-
     loadavgwatch_log_object log_info_callback = {log_info, stdout};
     loadavgwatch_log_object log_warning_callback = {log_warning, stderr};
     loadavgwatch_log_object log_error_callback = {log_error, stderr};
@@ -82,26 +91,66 @@ int main(int argc, char* argv[])
         {"log-error", &log_error_callback},
         {NULL, NULL}
     };
-    loadavgwatch_state* state;
-    loadavgwatch_status open_ret = loadavgwatch_open(init_parameters, &state);
+    loadavgwatch_status open_ret = loadavgwatch_open(init_parameters, out_state);
     switch (open_ret) {
     case LOADAVGWATCH_ERR_OUT_OF_MEMORY:
         log_error("Out of memory in library initialization!", stderr);
         return EXIT_FAILURE;
     case LOADAVGWATCH_ERR_READ:
-        log_error("Read error in library initialization!", stderr);
+        log_error(
+            "Read error in library initialization! Check file access rights!",
+            stderr);
         return EXIT_FAILURE;
     case LOADAVGWATCH_ERR_INIT:
-        log_error("Library initialization error!", stderr);
+    case LOADAVGWATCH_ERR_PARSE:
+    case LOADAVGWATCH_ERR_CLOCK:
+        log_error("Unknown library initialization error!", stderr);
         return EXIT_FAILURE;
     case LOADAVGWATCH_ERR_INVALID_PARAMETER:
-        log_warning("Invalid parameter for the library!", stderr);
+        log_warning(
+            "Invalid library parameter! Is this program linked correctly?",
+            stderr);
         break;
     case LOADAVGWATCH_OK:
         break;
     default:
         abort();
     }
+    return EXIT_SUCCESS;
+}
+
+static void show_help(const program_options* program_options, char* argv[])
+{
+    printf("Usage: %s [OPTION]...\n", argv[0]);
+    printf(
+"Execute actions based on the current machine load (1 minute load average).\n"
+"\n"
+"Available options:\n"
+"  -h, --help               Show this help\n"
+"  --start-load=VALUE       Maximum load value where we still execute the\n"
+"                            start command (%s).\n"
+"  --stop-load=VALUE        Minimum load value where we start executing the\n"
+"                            stop command (%s).\n"
+"  -s, --start-command=CMD  Command to run while we still are under the\n"
+"                            start load value.\n"
+"  -t, --stop-command=CMD   Command to run when we go over the stop load limit.\n"
+"  --start-interval=TIME    Time we wait between subsequent start command runs\n"
+"                            (%s).\n"
+"  --stop-interval=TIME     Time we wait between subsequent start command runs\n"
+"                            (%s).\n",
+"default-start-load",
+"default-stop-load",
+"default-start-interval",
+"default-stop-interval"
+        );
+}
+
+static setup_options_result setup_options(
+    loadavgwatch_state* state,
+    int argc,
+    char* argv[],
+    program_options* out_program_options)
+{
     union {
         struct _defaults {
             loadavgwatch_parameter system;
@@ -128,6 +177,25 @@ int main(int argc, char* argv[])
         return EXIT_FAILURE;
     }
 
+    /* struct */
+    /* { */
+    /*     char* show_help; */
+    /*     char* dry_run; */
+    /*     char* start_load; */
+    /*     char* stop_load; */
+    /*     char* quiet_period_minutes; */
+    /*     char* start_script; */
+    /*     char* stop_script; */
+    /* } command_line_args = { NULL }; */
+
+    const char* current_argument = argv[1];
+    for (int argument = 1; argument < argc; ++argument) {
+        if (strcmp(current_argument, "--help") == 0 || strcmp(current_argument, "-h") == 0) {
+            show_help(out_program_options, argv);
+            return OPTIONS_HELP;
+        }
+    }
+
     char info[128];
     snprintf(
         info, sizeof(info),
@@ -142,7 +210,12 @@ int main(int argc, char* argv[])
            ((const struct timespec*)defaults.s.start_interval.value)->tv_sec / 60.0);
     printf("stop-interval: %0.2f min\n",
            ((const struct timespec*)defaults.s.stop_interval.value)->tv_sec / 60.0);
+    return OPTIONS_OK;
+}
 
+static int monitor_and_act(
+    loadavgwatch_state* state, program_options* options)
+{
     struct timespec sleep_time = {
         .tv_sec = 5,
         .tv_nsec = 0
@@ -153,9 +226,10 @@ int main(int argc, char* argv[])
     };
     sigaction(SIGALRM, &alarm_action, NULL);
 
-    const char start_script[] = "sleep 15";
-    const char stop_script[] = "sleep 15";
-    while (true) {
+    const char start_script[] = "echo start";
+    const char stop_script[] = "echo stop";
+    bool running = true;
+    while (running) {
         loadavgwatch_poll_result poll_result;
         if (loadavgwatch_poll(state, &poll_result) != 0) {
             abort();
@@ -186,9 +260,34 @@ int main(int argc, char* argv[])
             sleep_return = nanosleep(&sleep_remaining, &sleep_remaining);
         } while (sleep_return == -1);
     }
-
-    if (loadavgwatch_close(&state) != 0) {
-        abort();
-    }
     return EXIT_SUCCESS;
+}
+
+int main(int argc, char* argv[])
+{
+    loadavgwatch_state* state;
+    {
+        int result = init_library(&state);
+        if (result != EXIT_SUCCESS) {
+            return result;
+        }
+    }
+    program_options program_options;
+    {
+        setup_options_result result = setup_options(
+            state, argc, argv, &program_options);
+        if (result == OPTIONS_HELP) {
+            return EXIT_SUCCESS;
+        } else if (result == OPTIONS_FAILURE) {
+            return EXIT_FAILURE;
+        }
+    }
+    int program_result = monitor_and_act(state, &program_options);
+
+    if (loadavgwatch_close(&state) != LOADAVGWATCH_OK) {
+        log_error(
+            "Unable to close the library! This should never happen", stderr);
+        program_result = EXIT_FAILURE;
+    }
+    return program_result;
 }
