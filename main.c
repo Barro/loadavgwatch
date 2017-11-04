@@ -121,23 +121,25 @@ static int init_library(loadavgwatch_state** out_state)
 
 static void show_help(const program_options* program_options, char* argv[])
 {
-    printf("Usage: %s [OPTION]...\n", argv[0]);
+    printf("Usage: %s [options]\n", argv[0]);
     printf(
 "Execute actions based on the current machine load (1 minute load average).\n"
 "\n"
-"Available options:\n"
-"  -h, --help               Show this help\n"
-"  --start-load=VALUE       Maximum load value where we still execute the\n"
-"                            start command (%s).\n"
-"  --stop-load=VALUE        Minimum load value where we start executing the\n"
-"                            stop command (%s).\n"
-"  -s, --start-command=CMD  Command to run while we still are under the\n"
-"                            start load value.\n"
-"  -t, --stop-command=CMD   Command to run when we go over the stop load limit.\n"
-"  --start-interval=TIME    Time we wait between subsequent start command runs\n"
-"                            (%s).\n"
-"  --stop-interval=TIME     Time we wait between subsequent start command runs\n"
-"                            (%s).\n",
+"Options:\n"
+"  -h, --help           Show this help.\n"
+"  --start-load <value> Maximum load value where we still execute the start command (%s).\n"
+"  --stop-load <value>  Minimum load value where we start executing the stop command (%s).\n"
+"  -s, --start-command <command>\n"
+"                       Command to run while we still are under the start load value.\n"
+"  -t, --stop-command <command>\n"
+"                       Command to run when we go over the stop load limit.\n"
+"  --start-interval <time>\n"
+"                       Time we wait between subsequent start command runs (%s).\n"
+"  --stop-interval <time>\n"
+"                       Time we wait between subsequent start command runs (%s).\n"
+"  --timeout <time>     Execute only for specified amount of time. Otherwise run until interrupted.\n"
+"  --dry-run            Do not run any commands. Only show what would be done.\n"
+"  --version            Show version information.\n",
 "default-start-load",
 "default-stop-load",
 "default-start-interval",
