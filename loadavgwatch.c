@@ -47,10 +47,11 @@ static const struct {
     const char* log_warning;
     const char* log_error;
     const char* start_load;
-    const char* stop_load;
-    const char* quiet_period;
     const char* start_interval;
+    const char* quiet_period_over_start;
+    const char* stop_load;
     const char* stop_interval;
+    const char* quiet_period_over_stop;
     const char* impl_clock;
     const char* impl_get_system;
     const char* impl_get_ncpus;
@@ -66,11 +67,12 @@ static const struct {
     .log_error = "log-error",
 
     .start_load = "start-load",
-    .stop_load = "stop-load",
-
-    .quiet_period = "quiet-period",
     .start_interval = "start-interval",
+    .quiet_period_over_start = "quiet-period-over-start",
+
+    .stop_load = "stop-load",
     .stop_interval = "stop-interval",
+    .quiet_period_over_stop = "quiet-period-over-stop",
 
     // Used for testing:
     .impl_get_system = "impl-get-system",
@@ -191,8 +193,11 @@ static loadavgwatch_status read_parameters(
             }
             strcpy(inout_state->stop_load_str, load_value);
             inout_state->stop_load = stop_load;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period) == 0) {
-            inout_state->quiet_period = *(
+        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_start) == 0) {
+            inout_state->quiet_period_over_start = *(
+                (struct timespec*)current_parameter->value);
+        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_stop) == 0) {
+            inout_state->quiet_period_over_stop = *(
                 (struct timespec*)current_parameter->value);
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_interval) == 0) {
             inout_state->start_interval = *(
@@ -258,7 +263,11 @@ loadavgwatch_status loadavgwatch_open(
     // are really machine specific:
 
     // Default values for program starting/stopping related times:
-    state->quiet_period = (struct timespec){
+    state->quiet_period_over_start = (struct timespec){
+        .tv_sec = 10 * 60,
+        .tv_nsec = 0
+    };
+    state->quiet_period_over_stop = (struct timespec){
         .tv_sec = 60 * 60,
         .tv_nsec = 0
     };
@@ -336,6 +345,7 @@ loadavgwatch_status loadavgwatch_open(
 loadavgwatch_status loadavgwatch_parameters_get(
     loadavgwatch_state* state, loadavgwatch_parameter* inout_parameters)
 {
+    assert(state != NULL && "Used uninitialized library!");
     if (!check_for_unknown_parameters(state, inout_parameters)) {
         return LOADAVGWATCH_ERR_INVALID_PARAMETER;
     }
@@ -353,8 +363,10 @@ loadavgwatch_status loadavgwatch_parameters_get(
             current_parameter->value = state->start_load_str;
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_load) == 0) {
             current_parameter->value = state->stop_load_str;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period) == 0) {
-            current_parameter->value = &state->quiet_period;
+        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_start) == 0) {
+            current_parameter->value = &state->quiet_period_over_start;
+        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_stop) == 0) {
+            current_parameter->value = &state->quiet_period_over_stop;
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_interval) == 0) {
             current_parameter->value = &state->start_interval;
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_interval) == 0) {
@@ -382,6 +394,7 @@ loadavgwatch_status loadavgwatch_parameters_get(
 loadavgwatch_status loadavgwatch_parameters_set(
     loadavgwatch_state* inout_state, loadavgwatch_parameter* parameters)
 {
+    assert(inout_state != NULL && "Used uninitialized library!");
     loadavgwatch_status status = read_parameters(inout_state, parameters);
     adjust_start_stop_loads(inout_state);
     return status;
@@ -399,42 +412,125 @@ loadavgwatch_status loadavgwatch_close(loadavgwatch_state** state)
     return LOADAVGWATCH_OK;
 }
 
+
+static bool time_less_than(
+    const struct timespec* left, const struct timespec* right)
+{
+    if (left->tv_sec < right->tv_sec) {
+        return true;
+    }
+    if (right->tv_sec < left->tv_sec) {
+        return false;
+    }
+    return left->tv_nsec < right->tv_nsec;
+}
+
+/**
+ * Calculates the difference between two time values
+ *
+ * If the difference would be negative, this will then result in zero
+ * time difference.
+ */
+static struct timespec time_difference(
+    const struct timespec* bigger, const struct timespec* smaller)
+{
+    struct timespec result = { .tv_sec = 0, .tv_nsec = 0 };
+    if (time_less_than(bigger, smaller)) {
+        return result;
+    }
+    time_t diff_sec = bigger->tv_sec - smaller->tv_sec;
+    long diff_nsec = bigger->tv_nsec - smaller->tv_nsec;
+    if (diff_nsec < 0) {
+        diff_sec--;
+        diff_nsec += 1000000000;
+    }
+    result.tv_sec = diff_sec;
+    result.tv_nsec = diff_nsec;
+    return result;
+}
+
 loadavgwatch_status loadavgwatch_poll(
     loadavgwatch_state* state, loadavgwatch_poll_result* out_result)
 {
-    assert(state != NULL && "Used uninitialized library! loadavgwatch_open() error codes!");
+    assert(state != NULL && "Used uninitialized library!");
+    // Default no-change result in case the reader does not check the
+    // status code of this command:
+    loadavgwatch_poll_result result = {
+        .start_count = 0,
+        .stop_count = 0,
+    };
+
     float load_average;
     loadavgwatch_status read_status = state->impl_get_load_average(
         state->impl_state, &load_average);
     if (read_status != LOADAVGWATCH_OK) {
+        *out_result = result;
         return read_status;
     }
-    PRINT_LOG_MESSAGE(state->log_info, "Load average: %0.2f", load_average);
-    state->last_load_average = load_average;
-    uint32_t start_count = 0;
-    if (load_average < state->start_load) {
-        start_count = (uint32_t)(state->start_load - load_average) + 1;
+    struct timespec now;
+    if (state->impl_clock(CLOCK_MONOTONIC, &now) != 0) {
+        PRINT_LOG_MESSAGE(
+            state->log_warning, "Unable to read current poll time!");
+        *out_result = result;
+        return LOADAVGWATCH_ERR_CLOCK;
     }
-    uint32_t stop_count = 0;
-    if (load_average > state->stop_load) {
-        stop_count = (uint32_t)(load_average - state->stop_load) + 1;
+    PRINT_LOG_MESSAGE(state->log_info, "Load average: %0.2f", load_average);
+
+    if (load_average < state->start_load) {
+        struct timespec start_difference = time_difference(
+            &now, &state->last_start_time);
+        bool start_not_too_often = time_less_than(
+            &state->start_interval, &start_difference);
+        struct timespec quiet_difference_start = time_difference(
+            &now, &state->last_over_start_load);
+        bool start_not_in_over_start_quiet_period = time_less_than(
+            &state->quiet_period_over_start, &quiet_difference_start);
+        struct timespec quiet_difference_stop = time_difference(
+            &now, &state->last_over_stop_load);
+        bool start_not_in_over_stop_quiet_period = time_less_than(
+            &state->quiet_period_over_stop, &quiet_difference_stop);
+        if (start_not_too_often
+            && start_not_in_over_start_quiet_period
+            && start_not_in_over_stop_quiet_period) {
+            result.start_count = (uint32_t)(state->start_load - load_average) + 1;
+        }
+    } else {
+        state->last_over_start_load = now;
     }
 
-    loadavgwatch_poll_result result = {
-        .start_count = start_count,
-        .stop_count = stop_count,
-    };
+    if (load_average > state->stop_load) {
+        struct timespec stop_difference = time_difference(
+            &now, &state->last_stop_time);
+        bool stop_not_too_often = time_less_than(
+            &state->stop_interval, &stop_difference);
+        if (stop_not_too_often) {
+            result.stop_count = (uint32_t)(load_average - state->stop_load) + 1;
+        }
+        state->last_over_stop_load = now;
+    }
+
     *out_result = result;
     return LOADAVGWATCH_OK;
 }
 
 loadavgwatch_status loadavgwatch_register_start(loadavgwatch_state* state)
 {
+    assert(state != NULL && "Used uninitialized library!");
+    if (state->impl_clock(CLOCK_MONOTONIC, &state->last_start_time) != 0) {
+        PRINT_LOG_MESSAGE(
+            state->log_warning, "Unable to register command start time!");
+        return LOADAVGWATCH_ERR_CLOCK;
+    }
     return LOADAVGWATCH_OK;
 }
 
 loadavgwatch_status loadavgwatch_register_stop(loadavgwatch_state* state)
 {
+    assert(state != NULL && "Used uninitialized library!");
+    if (state->impl_clock(CLOCK_MONOTONIC, &state->last_stop_time) != 0) {
+        PRINT_LOG_MESSAGE(
+            state->log_warning, "Unable to register command stop time!");
+        return LOADAVGWATCH_ERR_CLOCK;
+    }
     return LOADAVGWATCH_OK;
 }
-

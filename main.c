@@ -31,10 +31,11 @@ typedef struct program_options
 {
     // Defaults given by the library:
     const char* start_load;
-    const char* stop_load;
-    const char* quiet_period;
     const char* start_interval;
+    const char* quiet_period_over_start;
+    const char* stop_load;
     const char* stop_interval;
+    const char* quiet_period_over_stop;
 
     // These values are used inside main() to do actions:
     const char* start_script;
@@ -157,10 +158,11 @@ static setup_options_result setup_options(
         struct _defaults {
             loadavgwatch_parameter system;
             loadavgwatch_parameter start_load;
-            loadavgwatch_parameter stop_load;
-            loadavgwatch_parameter quiet_period;
             loadavgwatch_parameter start_interval;
+            loadavgwatch_parameter quiet_period_over_start;
+            loadavgwatch_parameter stop_load;
             loadavgwatch_parameter stop_interval;
+            loadavgwatch_parameter quiet_period_over_stop;
             loadavgwatch_parameter _end;
         } s;
         loadavgwatch_parameter array[
@@ -168,10 +170,11 @@ static setup_options_result setup_options(
     } defaults = {
         .s.system = {"system", NULL},
         .s.start_load = {"start-load", NULL},
-        .s.stop_load = {"stop-load", NULL},
-        .s.quiet_period = {"quiet-period", NULL},
         .s.start_interval = {"start-interval", NULL},
+        .s.quiet_period_over_start = {"quiet-period-over-start", NULL},
+        .s.stop_load = {"stop-load", NULL},
         .s.stop_interval = {"stop-interval", NULL},
+        .s.quiet_period_over_stop = {"quiet-period-over-stop", NULL},
         .s._end = {NULL, NULL}
     };
     if (loadavgwatch_parameters_get(state, defaults.array) != LOADAVGWATCH_OK) {
@@ -206,8 +209,10 @@ static setup_options_result setup_options(
 
     printf("start-load: %s\n", (const char*)defaults.s.start_load.value);
     printf("stop-load: %s\n", (const char*)defaults.s.stop_load.value);
-    printf("quiet-period: %0.2f min\n",
-           ((const struct timespec*)defaults.s.quiet_period.value)->tv_sec / 60.0);
+    printf("quiet-period-over-start: %0.2f min\n",
+           ((const struct timespec*)defaults.s.quiet_period_over_start.value)->tv_sec / 60.0);
+    printf("quiet-period-over-stop: %0.2f min\n",
+           ((const struct timespec*)defaults.s.quiet_period_over_stop.value)->tv_sec / 60.0);
     printf("start-interval: %0.2f min\n",
            ((const struct timespec*)defaults.s.start_interval.value)->tv_sec / 60.0);
     printf("stop-interval: %0.2f min\n",
@@ -218,26 +223,41 @@ static setup_options_result setup_options(
 static int monitor_and_act(
     loadavgwatch_state* state, program_options* options)
 {
+    // 3 pollings in 1 minute should result in high enough default
+    // polling rate to catch relatively soon 1 minute load average
+    // changes.
     struct timespec sleep_time = {
-        .tv_sec = 5,
+        .tv_sec = 20,
         .tv_nsec = 0
     };
+    // If start or stop interval is smaller than the default sleep
+    // time, adjust it down.
+    // TODO...
 
     struct sigaction alarm_action = {
         .sa_sigaction = alarm_handler,
     };
     sigaction(SIGALRM, &alarm_action, NULL);
 
-    const char start_script[] = "echo start";
-    const char stop_script[] = "echo stop";
+    const char start_script[] = "date; echo start";
+    const char stop_script[] = "date; echo stop";
     bool running = true;
+    // TODO override this:
+    struct timespec timeout = { .tv_sec = 30, .tv_nsec = 0 };
+    struct timespec start_time;
+    if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0) {
+        log_error("Unable to register program start time!", stderr);
+        return EXIT_FAILURE;
+    }
+    struct timespec end_time = {
+        .tv_sec = start_time.tv_sec + timeout.tv_sec };
     while (running) {
         loadavgwatch_poll_result poll_result;
-        if (loadavgwatch_poll(state, &poll_result) != 0) {
+        if (loadavgwatch_poll(state, &poll_result) != LOADAVGWATCH_OK) {
             abort();
         }
-        printf("%u %u\n", poll_result.start_count, poll_result.stop_count);
-        if (poll_result.start_count > 1) {
+        if (poll_result.start_count > 0) {
+            loadavgwatch_register_start(state);
             g_child_action = "start";
             g_child_execution_warning_timeout = 10;
             alarm(10);
@@ -246,7 +266,9 @@ static int monitor_and_act(
             if (ret != EXIT_SUCCESS) {
                 log_warning("Child process exited with non-zero status.", stderr);
             }
-        } else {
+        }
+        if (poll_result.stop_count > 0) {
+            loadavgwatch_register_stop(state);
             g_child_action = "stop";
             g_child_execution_warning_timeout = 10;
             alarm(10);
@@ -261,6 +283,15 @@ static int monitor_and_act(
         do {
             sleep_return = nanosleep(&sleep_remaining, &sleep_remaining);
         } while (sleep_return == -1);
+        struct timespec now;
+        if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+            log_error("Unable to register current time!", stderr);
+            return EXIT_FAILURE;
+        }
+        if (timeout.tv_sec > 0 && now.tv_sec < end_time.tv_sec) {
+            log_info("Timeout reached.", stdout);
+            running = false;
+        }
     }
     return EXIT_SUCCESS;
 }
