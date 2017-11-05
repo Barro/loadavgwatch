@@ -16,10 +16,7 @@
  * along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define _POSIX_C_SOURCE 199309L
-// _POSIX_C_SOURCE disables some of the standard C99 functions on OS
-// X. Define _C99_SOURCE to word around that issue.
-#define _C99_SOURCE
+#define _XOPEN_SOURCE 600
 
 #include <assert.h>
 #include "loadavgwatch.h"
