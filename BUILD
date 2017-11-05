@@ -24,6 +24,7 @@ cc_library(
     hdrs = ["loadavgwatch.h"],
     copts = ["--std=c99"],
     visibility = ["//visibility:private"],
+    licenses = ["reciprocal"],
 )
 cc_inc_library(
     name = "libloadavgwatch",
@@ -35,6 +36,7 @@ cc_binary(
     srcs = ["main.c"],
     deps = [":libloadavgwatch"],
     copts = ["--std=c99"],
+    licenses = ["reciprocal"],
 )
 config_setting(
     name = "linux_mode",

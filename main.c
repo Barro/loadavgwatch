@@ -46,6 +46,7 @@ typedef struct program_options
 typedef enum setup_options_result {
     OPTIONS_OK = 0,
     OPTIONS_HELP = 1,
+    OPTIONS_VERSION = 2,
     OPTIONS_FAILURE = -1
 } setup_options_result;
 
@@ -118,6 +119,15 @@ static int init_library(loadavgwatch_state** out_state)
         abort();
     }
     return EXIT_SUCCESS;
+}
+
+static void show_version(const program_options* program_options)
+{
+    printf("loadavgwatch %s %s\n", "0.0.0", "linux");
+    printf("Copyright (C) 2017 Jussi Judin\n");
+    printf("License GPLv3: GNU GPL version 3 <https://gnu.org/licenses/gpl.html>.\n");
+    printf("This is free software: you are free to change and redistribute it.\n");
+    printf("There is NO WARRANTY, to the extent permitted by law.\n");
 }
 
 static void show_help(const program_options* program_options, char* argv[])
@@ -199,13 +209,11 @@ static setup_options_result setup_options(
             show_help(out_program_options, argv);
             return OPTIONS_HELP;
         }
+        if (strcmp(current_argument, "--version") == 0) {
+            show_version(out_program_options);
+            return OPTIONS_VERSION;
+        }
     }
-
-    char info[128];
-    snprintf(
-        info, sizeof(info),
-        "loadavgwatch 0.0.0 %s", (const char*)defaults.s.system.value);
-    log_info(info, stdout);
 
     printf("start-load: %s\n", (const char*)defaults.s.start_load.value);
     printf("stop-load: %s\n", (const char*)defaults.s.stop_load.value);
@@ -309,10 +317,10 @@ int main(int argc, char* argv[])
     {
         setup_options_result result = setup_options(
             state, argc, argv, &program_options);
-        if (result == OPTIONS_HELP) {
-            return EXIT_SUCCESS;
-        } else if (result == OPTIONS_FAILURE) {
+        if (result == OPTIONS_FAILURE) {
             return EXIT_FAILURE;
+        } else if (result != OPTIONS_OK) {
+            return EXIT_SUCCESS;
         }
     }
     int program_result = monitor_and_act(state, &program_options);
