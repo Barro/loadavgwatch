@@ -17,11 +17,17 @@
 cc_library(
     name = "libloadavgwatch_impl",
     srcs = ["loadavgwatch.c", "loadavgwatch-impl.h"] + select({
-         ":linux_mode": ["loadavgwatch-linux.c"],
-         ":darwin_mode": ["loadavgwatch-darwin.c", "loadavgwatch-sysctl.c"],
-         ":freebsd_mode": ["loadavgwatch-bsd.c", "loadavgwatch-sysctl.c"],
+        ":linux_mode": ["loadavgwatch-linux.c"],
+        ":darwin_mode": ["loadavgwatch-darwin.c"],
+        ":freebsd_mode": ["loadavgwatch-bsd.c"],
     }),
-    hdrs = ["loadavgwatch.h"],
+    hdrs = ["loadavgwatch.h"] + select({
+        # Make included system specific .c files visible to the
+        # compilation without compiling them:
+        ":linux_mode": [],
+        ":darwin_mode": ["loadavgwatch-sysctl.c"],
+        ":freebsd_mode": ["loadavgwatch-sysctl.c"],
+    }),
     copts = ["--std=c99"],
     visibility = ["//visibility:private"],
     licenses = ["reciprocal"],

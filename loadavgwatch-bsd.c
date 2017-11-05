@@ -17,6 +17,7 @@
  */
 
 #include "loadavgwatch-impl.h"
+#include "loadavgwatch-sysctl.c"
 
 const char* loadavgwatch_impl_get_system(void)
 {

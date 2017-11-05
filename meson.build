@@ -21,9 +21,9 @@ library_files = ['loadavgwatch.c']
 if target_machine.system() == 'linux'
     library_files += 'loadavgwatch-linux.c'
 elif target_machine.system() == 'darwin'
-    library_files += ['loadavgwatch-darwin.c', 'loadavgwatch-sysctl.c']
+    library_files += ['loadavgwatch-darwin.c']
 elif target_machine.system() == 'freebsd'
-    library_files += ['loadavgwatch-bsd.c', 'loadavgwatch-sysctl.c']
+    library_files += ['loadavgwatch-bsd.c']
 endif
 
 lib = static_library('loadavgwatch', library_files)

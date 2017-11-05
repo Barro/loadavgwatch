@@ -31,4 +31,4 @@ compiler:
 
 install: true
 
-script: meson build-meson && ninja -C build-meson && bazel build ...:all
+script: meson build-meson && ninja -C build-meson && bazel build :all
