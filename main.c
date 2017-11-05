@@ -41,6 +41,8 @@ typedef struct program_options
     const char* start_script;
     const char* stop_script;
     bool dry_run;
+    bool has_timeout;
+    struct timespec timeout;
 } program_options;
 
 typedef enum setup_options_result {
@@ -189,7 +191,7 @@ static setup_options_result setup_options(
     };
     if (loadavgwatch_parameters_get(state, defaults.array) != LOADAVGWATCH_OK) {
         log_error("Failed to get the default parameter values", stderr);
-        return EXIT_FAILURE;
+        return OPTIONS_FAILURE;
     }
 
     /* struct */
@@ -203,8 +205,8 @@ static setup_options_result setup_options(
     /*     char* stop_script; */
     /* } command_line_args = { NULL }; */
 
-    const char* current_argument = argv[1];
     for (int argument = 1; argument < argc; ++argument) {
+        const char* current_argument = argv[argument];
         if (strcmp(current_argument, "--help") == 0 || strcmp(current_argument, "-h") == 0) {
             show_help(out_program_options, argv);
             return OPTIONS_HELP;
@@ -212,6 +214,23 @@ static setup_options_result setup_options(
         if (strcmp(current_argument, "--version") == 0) {
             show_version(out_program_options);
             return OPTIONS_VERSION;
+        }
+        if (strcmp(current_argument, "--timeout") == 0) {
+            int next_index = argument + 1;
+            if (next_index >= argc) {
+                log_error("No value for --timeout option!", stderr);
+                return OPTIONS_FAILURE;
+            }
+            ++argument;
+            current_argument = argv[argument];
+
+            if (strcmp(current_argument, "0") != 0) {
+                log_error("TODO non-zero timeout", stderr);
+                return OPTIONS_FAILURE;
+            }
+            out_program_options->has_timeout = true;
+            out_program_options->timeout.tv_sec = 0;
+            out_program_options->timeout.tv_nsec = 0;
         }
     }
 
@@ -250,7 +269,8 @@ static int monitor_and_act(
     const char start_script[] = "date; echo start";
     const char stop_script[] = "date; echo stop";
     bool running = true;
-    // TODO override this:
+    // TODO override timeouts:
+    bool has_timeout = true;
     struct timespec timeout = { .tv_sec = 30, .tv_nsec = 0 };
     struct timespec start_time;
     if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0) {
@@ -287,16 +307,16 @@ static int monitor_and_act(
             }
         }
         int sleep_return = -1;
-        struct timespec sleep_remaining = sleep_time;
-        do {
-            sleep_return = nanosleep(&sleep_remaining, &sleep_remaining);
-        } while (sleep_return == -1);
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
             log_error("Unable to register current time!", stderr);
             return EXIT_FAILURE;
         }
-        if (timeout.tv_sec > 0 && now.tv_sec < end_time.tv_sec) {
+        struct timespec sleep_remaining = sleep_time;
+        do {
+            sleep_return = nanosleep(&sleep_remaining, &sleep_remaining);
+        } while (sleep_return == -1);
+        if (has_timeout && now.tv_sec < end_time.tv_sec) {
             log_info("Timeout reached.", stdout);
             running = false;
         }
