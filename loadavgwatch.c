@@ -52,12 +52,7 @@ static const struct {
     const char* stop_load;
     const char* stop_interval;
     const char* quiet_period_over_stop;
-    const char* impl_clock;
-    const char* impl_get_system;
-    const char* impl_get_ncpus;
-    const char* impl_open;
-    const char* impl_close;
-    const char* impl_get_load_average;
+    const char* impl_callbacks;
     const char* _last;
 } VALID_PARAMETERS = {
     .system = "system",
@@ -75,12 +70,7 @@ static const struct {
     .quiet_period_over_stop = "quiet-period-over-stop",
 
     // Used for testing:
-    .impl_get_system = "impl-get-system",
-    .impl_get_ncpus = "impl-get-ncpus",
-    .impl_clock = "impl-clock",
-    .impl_open = "impl-open",
-    .impl_close = "impl-close",
-    .impl_get_load_average = "impl-get-load-average",
+    .impl_callbacks = "impl-callbacks",
 };
 
 static void adjust_start_stop_loads(loadavgwatch_state* inout_state)
@@ -205,20 +195,28 @@ static loadavgwatch_status read_parameters(
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_interval) == 0) {
             inout_state->stop_interval = *(
                 (struct timespec*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_clock) == 0) {
-            inout_state->impl_clock = *((impl_clock*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_get_system) == 0) {
+        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_callbacks) == 0) {
+            loadavgwatch_callbacks* callbacks = current_parameter->value;
+            // Callback overrides enable partial overrides by just setting parameters to NULL.
+            if (callbacks->clock != NULL) {
+                inout_state->impl.clock = callbacks->clock;
+            }
             // Well system is really not read-only. It's just overridable for unit tests...
-            inout_state->impl_get_system = *((impl_get_system*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_get_ncpus) == 0) {
-            inout_state->impl_get_ncpus = *((impl_get_ncpus*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_open) == 0) {
-            inout_state->impl_open = *((impl_open*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_close) == 0) {
-            inout_state->impl_close = *((impl_close*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_get_load_average) == 0) {
-            inout_state->impl_get_load_average = *(
-                (impl_get_load_average*)current_parameter->value);
+            if (callbacks->get_system != NULL) {
+                inout_state->impl.get_system = callbacks->get_system;
+            }
+            if (callbacks->get_ncpus != NULL) {
+                inout_state->impl.get_ncpus = callbacks->get_ncpus;
+            }
+            if (callbacks->open != NULL) {
+                inout_state->impl.open = callbacks->open;
+            }
+            if (callbacks->close != NULL) {
+                inout_state->impl.close = callbacks->close;
+            }
+            if (callbacks->get_load_average != NULL) {
+                inout_state->impl.get_load_average = callbacks->get_load_average;
+            }
         } else {
             // We haven't initialized the logger yet. Register the
             // problem, but don't do anything yet.
@@ -281,12 +279,12 @@ loadavgwatch_status loadavgwatch_open(
     };
 
     // Defaults that mainly tests should be interested in overwriting:
-    state->impl_clock = clock_gettime;
-    state->impl_get_system = loadavgwatch_impl_get_system;
-    state->impl_get_ncpus = loadavgwatch_impl_get_ncpus;
-    state->impl_open = loadavgwatch_impl_open;
-    state->impl_close = loadavgwatch_impl_close;
-    state->impl_get_load_average = loadavgwatch_impl_get_load_average;
+    state->impl.clock = clock_gettime;
+    state->impl.get_system = loadavgwatch_impl_get_system;
+    state->impl.get_ncpus = loadavgwatch_impl_get_ncpus;
+    state->impl.open = loadavgwatch_impl_open;
+    state->impl.close = loadavgwatch_impl_close;
+    state->impl.get_load_average = loadavgwatch_impl_get_load_average;
 
     if (parameters != NULL) {
         int parameters_result = read_parameters(state, parameters);
@@ -296,7 +294,7 @@ loadavgwatch_status loadavgwatch_open(
         }
     }
 
-    long ncpus = state->impl_get_ncpus();
+    long ncpus = state->impl.get_ncpus();
     if (strlen(state->start_load_str) == 0) {
         if (ncpus > 0) {
             state->start_load= (float)(ncpus - 1) + 0.02;
@@ -332,7 +330,7 @@ loadavgwatch_status loadavgwatch_open(
     adjust_start_stop_loads(state);
 
     void* impl_state = NULL;
-    loadavgwatch_status impl_open_result = state->impl_open(state, &impl_state);
+    loadavgwatch_status impl_open_result = state->impl.open(state, &impl_state);
     if (impl_open_result != LOADAVGWATCH_OK) {
         return impl_open_result;
     }
@@ -352,7 +350,7 @@ loadavgwatch_status loadavgwatch_parameters_get(
     loadavgwatch_parameter* current_parameter = inout_parameters;
     while (current_parameter->key != NULL) {
         if (strcmp(current_parameter->key, VALID_PARAMETERS.system) == 0) {
-            current_parameter->value = (char*)state->impl_get_system();
+            current_parameter->value = (char*)state->impl.get_system();
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_info) == 0) {
             current_parameter->value = &state->log_info;
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_warning) == 0) {
@@ -371,18 +369,8 @@ loadavgwatch_status loadavgwatch_parameters_get(
             current_parameter->value = &state->start_interval;
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_interval) == 0) {
             current_parameter->value = &state->stop_interval;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_clock) == 0) {
-            current_parameter->value = state->impl_clock;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_get_system) == 0) {
-            current_parameter->value = state->impl_get_system;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_get_ncpus) == 0) {
-            current_parameter->value = state->impl_get_ncpus;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_open) == 0) {
-            current_parameter->value = state->impl_open;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_close) == 0) {
-            current_parameter->value = state->impl_close;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_get_load_average) == 0) {
-            current_parameter->value = state->impl_get_load_average;
+        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_callbacks) == 0) {
+            current_parameter->value = &state->impl;
         } else {
             assert(false && "We should never reach here!");
         }
@@ -405,7 +393,7 @@ loadavgwatch_status loadavgwatch_close(loadavgwatch_state** state)
     if (*state == NULL) {
         return LOADAVGWATCH_OK;
     }
-    (*state)->impl_close((*state)->impl_state);
+    (*state)->impl.close((*state)->impl_state);
     memset((*state), 0, sizeof(loadavgwatch_state));
     free(*state);
     *state = NULL;
@@ -461,14 +449,14 @@ loadavgwatch_status loadavgwatch_poll(
     };
 
     float load_average;
-    loadavgwatch_status read_status = state->impl_get_load_average(
+    loadavgwatch_status read_status = state->impl.get_load_average(
         state->impl_state, &load_average);
     if (read_status != LOADAVGWATCH_OK) {
         *out_result = result;
         return read_status;
     }
     struct timespec now;
-    if (state->impl_clock(CLOCK_MONOTONIC, &now) != 0) {
+    if (state->impl.clock(CLOCK_MONOTONIC, &now) != 0) {
         PRINT_LOG_MESSAGE(
             state->log_warning, "Unable to read current poll time!");
         *out_result = result;
@@ -516,7 +504,7 @@ loadavgwatch_status loadavgwatch_poll(
 loadavgwatch_status loadavgwatch_register_start(loadavgwatch_state* state)
 {
     assert(state != NULL && "Used uninitialized library!");
-    if (state->impl_clock(CLOCK_MONOTONIC, &state->last_start_time) != 0) {
+    if (state->impl.clock(CLOCK_MONOTONIC, &state->last_start_time) != 0) {
         PRINT_LOG_MESSAGE(
             state->log_warning, "Unable to register command start time!");
         return LOADAVGWATCH_ERR_CLOCK;
@@ -527,7 +515,7 @@ loadavgwatch_status loadavgwatch_register_start(loadavgwatch_state* state)
 loadavgwatch_status loadavgwatch_register_stop(loadavgwatch_state* state)
 {
     assert(state != NULL && "Used uninitialized library!");
-    if (state->impl_clock(CLOCK_MONOTONIC, &state->last_stop_time) != 0) {
+    if (state->impl.clock(CLOCK_MONOTONIC, &state->last_stop_time) != 0) {
         PRINT_LOG_MESSAGE(
             state->log_warning, "Unable to register command stop time!");
         return LOADAVGWATCH_ERR_CLOCK;

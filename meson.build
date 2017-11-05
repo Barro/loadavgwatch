@@ -26,5 +26,5 @@ elif target_machine.system() == 'freebsd'
     library_files += ['loadavgwatch-bsd.c']
 endif
 
-lib = static_library('loadavgwatch', library_files)
-executable('loadavgwatch', executable_files, link_with : lib)
+lib = static_library('loadavgwatch', library_files, c_args : ['-Werror=pedantic'])
+executable('loadavgwatch', executable_files, link_with : lib, c_args : ['-Werror=pedantic'])

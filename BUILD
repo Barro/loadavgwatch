@@ -28,7 +28,7 @@ cc_library(
         ":darwin_mode": ["loadavgwatch-sysctl.c"],
         ":freebsd_mode": ["loadavgwatch-sysctl.c"],
     }),
-    copts = ["--std=c99"],
+    copts = ["--std=c99", "-Werror=pedantic"],
     visibility = ["//visibility:private"],
     licenses = ["reciprocal"],
 )
@@ -41,7 +41,7 @@ cc_binary(
     name = "loadavgwatch",
     srcs = ["main.c"],
     deps = [":libloadavgwatch"],
-    copts = ["--std=c99"],
+    copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
 )
 config_setting(

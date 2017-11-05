@@ -42,6 +42,15 @@ typedef loadavgwatch_status(*impl_open)(const loadavgwatch_state* state, void** 
 typedef loadavgwatch_status(*impl_close)(void* impl_state);
 typedef loadavgwatch_status(*impl_get_load_average)(void* impl_state, float* out_loadavg);
 
+typedef struct loadavgwatch_callbacks {
+    impl_clock clock;
+    impl_get_system get_system;
+    impl_get_ncpus get_ncpus;
+    impl_open open;
+    impl_close close;
+    impl_get_load_average get_load_average;
+} loadavgwatch_callbacks;
+
 struct _loadavgwatch_state
 {
     float start_load;
@@ -64,18 +73,14 @@ struct _loadavgwatch_state
     loadavgwatch_log_object log_error;
     loadavgwatch_log_object log_warning;
 
-    impl_clock impl_clock;
-    impl_get_system impl_get_system;
-    impl_get_ncpus impl_get_ncpus;
-    impl_open impl_open;
-    impl_close impl_close;
-    impl_get_load_average impl_get_load_average;
+    loadavgwatch_callbacks impl;
 
     void* impl_state;
 };
 
 const char* loadavgwatch_impl_get_system(void);
 long loadavgwatch_impl_get_ncpus(void);
+
 loadavgwatch_status loadavgwatch_impl_open(
     const loadavgwatch_state* state, void** out_impl_state);
 loadavgwatch_status loadavgwatch_impl_close(void* impl_state);
