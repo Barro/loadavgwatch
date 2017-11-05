@@ -71,8 +71,8 @@ static long get_ncpus_proc_cpuinfo(const char* path)
     char line_buffer[1024];
     long ncpus = 0;
     while (fgets(line_buffer, sizeof(line_buffer), cpuinfo_fp)) {
-        char* processor_position = strstr(line_buffer, "processor");
-        if (processor_position != line_buffer) {
+        // Check that word "processor" is in the beginning of the line:
+        if (strncmp("processor", line_buffer, sizeof("processor") - 1) != 0) {
             continue;
         }
         // First check that there is a colon on the line:
