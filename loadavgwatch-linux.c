@@ -75,14 +75,15 @@ static long get_ncpus_proc_cpuinfo(const char* path)
         if (processor_position != line_buffer) {
             continue;
         }
+        // First check that there is a colon on the line:
+        char* colon_position = strchr(line_buffer, ':');
+        if (colon_position == NULL) {
+            continue;
+        }
         // Make sure that "processor" is the full word on the line:
         if (!(line_buffer[sizeof("processor") - 1] == ' '
               || line_buffer[sizeof("processor") - 1] == '\t'
               || line_buffer[sizeof("processor") - 1] == ':')) {
-            continue;
-        }
-        char* colon_position = strstr(line_buffer, ":");
-        if (colon_position == NULL) {
             continue;
         }
         // We have a line that has processor in the beginning and
@@ -119,7 +120,7 @@ static long get_ncpus_sys_devices(const char* path)
     char* saveptr = NULL;
     char* until_token = strtok_r(cpumask_buffer, ",", &saveptr);
     while (until_token != NULL) {
-        char* dash_position = strstr(until_token, "-");
+        char* dash_position = strchr(until_token, '-');
         if (dash_position != NULL) {
             unsigned long first_cpu;
             unsigned long last_cpu;
