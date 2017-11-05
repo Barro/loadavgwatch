@@ -31,18 +31,19 @@ typedef struct program_options
 {
     // Defaults given by the library:
     const char* start_load;
-    const char* start_interval;
-    const char* quiet_period_over_start;
+    const struct timespec* start_interval;
+    const struct timespec* quiet_period_over_start;
     const char* stop_load;
-    const char* stop_interval;
-    const char* quiet_period_over_stop;
+    const struct timespec* stop_interval;
+    const struct timespec* quiet_period_over_stop;
 
     // These values are used inside main() to do actions:
     const char* start_script;
     const char* stop_script;
-    bool dry_run;
     bool has_timeout;
     struct timespec timeout;
+    bool dry_run;
+    bool verbose;
 } program_options;
 
 typedef enum setup_options_result {
@@ -132,32 +133,82 @@ static void show_version(const program_options* program_options)
     printf("There is NO WARRANTY, to the extent permitted by law.\n");
 }
 
+static size_t timespec_to_string(
+    const struct timespec* value, char* out_result, size_t result_size)
+{
+    const time_t divisors[] = {24 * 60 * 60, 60 * 60, 60, 1};
+    const char* labels[] = {"d", "h", "m", "s"};
+    time_t remainder_seconds = value->tv_sec;
+    char* output = out_result;
+    ssize_t output_remaining = result_size;
+    for (int i = 0; i < sizeof(divisors) / sizeof(divisors[0]); ++i) {
+        time_t quotient = remainder_seconds / divisors[i];
+        remainder_seconds %= divisors[i];
+        if (quotient > 0) {
+            size_t written = snprintf(
+                output, output_remaining, "%ld%s", quotient, labels[i]);
+            output_remaining -= written;
+            output += written;
+            if (output_remaining <= 0) {
+                return result_size - output_remaining;
+            }
+        }
+    }
+    return result_size - output_remaining;
+}
+
+#define PROGRAM_OPTION_TIMESPEC_TO_STRING(option_name) \
+    char option_name[32] = ""; \
+    timespec_to_string( \
+        program_options->option_name, option_name, sizeof(option_name))
+
 static void show_help(const program_options* program_options, char* argv[])
 {
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(quiet_period_over_start);
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(quiet_period_over_stop);
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(start_interval);
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(stop_interval);
     printf("Usage: %s [options]\n", argv[0]);
     printf(
 "Execute actions based on the current machine load (1 minute load average).\n"
 "\n"
 "Options:\n"
 "  -h, --help           Show this help.\n"
-"  --start-load <value> Maximum load value where we still execute the start command (%s).\n"
-"  --stop-load <value>  Minimum load value where we start executing the stop command (%s).\n"
 "  -s, --start-command <command>\n"
 "                       Command to run while we still are under the start load value.\n"
 "  -t, --stop-command <command>\n"
 "                       Command to run when we go over the stop load limit.\n"
+);
+printf(
+"  --start-load <value> Maximum load value where we still execute the start command (%s).\n"
+"  --stop-load <value>  Minimum load value where we start executing the stop command (%s).\n",
+program_options->start_load,
+program_options->stop_load
+);
+printf(
+"  --quiet-period-over-start <time>\n"
+"                       Do not start new processes for this long (%s) when start load (%s) has been exceeded.\n"
+"  --quiet-period-over-stop <time>\n"
+"                       Do not start new processes for this long (%s) when stop load (%s) has been exceeded.\n",
+quiet_period_over_start,
+program_options->start_load,
+quiet_period_over_stop,
+program_options->stop_load
+);
+printf(
 "  --start-interval <time>\n"
-"                       Time we wait between subsequent start command runs (%s).\n"
+"                       Time we wait between subsequent start commands (%s).\n"
 "  --stop-interval <time>\n"
-"                       Time we wait between subsequent start command runs (%s).\n"
+"                       Time we wait between subsequent stop commands (%s).\n",
+start_interval,
+stop_interval
+);
+printf(
 "  --timeout <time>     Execute only for specified amount of time. Otherwise run until interrupted.\n"
 "  --dry-run            Do not run any commands. Only show what would be done.\n"
-"  --version            Show version information.\n",
-"default-start-load",
-"default-stop-load",
-"default-start-interval",
-"default-stop-interval"
-        );
+"  -v, --verbose        Show verbose output.\n"
+"  --version            Show version information.\n"
+);
 }
 
 static setup_options_result setup_options(
@@ -194,6 +245,17 @@ static setup_options_result setup_options(
         return OPTIONS_FAILURE;
     }
 
+    out_program_options->start_load = (const char*)defaults.s.start_load.value;
+    out_program_options->start_interval = (const struct timespec*)
+        defaults.s.start_interval.value;
+    out_program_options->quiet_period_over_start =
+        (const struct timespec*)defaults.s.quiet_period_over_start.value;
+    out_program_options->stop_load = (const char*)defaults.s.stop_load.value;
+    out_program_options->stop_interval = (const struct timespec*)
+        defaults.s.stop_interval.value;
+    out_program_options->quiet_period_over_stop =
+        (const struct timespec*)defaults.s.quiet_period_over_stop.value;
+
     /* struct */
     /* { */
     /*     char* show_help; */
@@ -206,7 +268,7 @@ static setup_options_result setup_options(
     /* } command_line_args = { NULL }; */
 
     for (int argument = 1; argument < argc; ++argument) {
-        const char* current_argument = argv[argument];
+        char* current_argument = argv[argument];
         if (strcmp(current_argument, "--help") == 0 || strcmp(current_argument, "-h") == 0) {
             show_help(out_program_options, argv);
             return OPTIONS_HELP;
@@ -234,16 +296,6 @@ static setup_options_result setup_options(
         }
     }
 
-    printf("start-load: %s\n", (const char*)defaults.s.start_load.value);
-    printf("stop-load: %s\n", (const char*)defaults.s.stop_load.value);
-    printf("quiet-period-over-start: %0.2f min\n",
-           ((const struct timespec*)defaults.s.quiet_period_over_start.value)->tv_sec / 60.0);
-    printf("quiet-period-over-stop: %0.2f min\n",
-           ((const struct timespec*)defaults.s.quiet_period_over_stop.value)->tv_sec / 60.0);
-    printf("start-interval: %0.2f min\n",
-           ((const struct timespec*)defaults.s.start_interval.value)->tv_sec / 60.0);
-    printf("stop-interval: %0.2f min\n",
-           ((const struct timespec*)defaults.s.stop_interval.value)->tv_sec / 60.0);
     return OPTIONS_OK;
 }
 

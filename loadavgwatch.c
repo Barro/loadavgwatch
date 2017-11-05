@@ -26,6 +26,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+// This corresponds to 1 month. Maximum sane intervals that the user
+// if this library might probably want are in hours. Allow interval of
+// several days for testing, but month is way too much. Except for
+// timeouts, but this library does not handle them.
+static const time_t MAX_INTERVAL_SECONDS = 2592000;
+
 static void log_null(
     const char* message __attribute__((unused)),
     void* data __attribute__((unused)))
@@ -181,15 +187,35 @@ static loadavgwatch_status read_parameters(
             strcpy(inout_state->stop_load_str, load_value);
             inout_state->stop_load = stop_load;
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_start) == 0) {
+            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
+                invalid_parameter_name = current_parameter->key;
+                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                continue;
+            }
             inout_state->quiet_period_over_start = *(
                 (struct timespec*)current_parameter->value);
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_stop) == 0) {
+            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
+                invalid_parameter_name = current_parameter->key;
+                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                continue;
+            }
             inout_state->quiet_period_over_stop = *(
                 (struct timespec*)current_parameter->value);
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_interval) == 0) {
+            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
+                invalid_parameter_name = current_parameter->key;
+                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                continue;
+            }
             inout_state->start_interval = *(
                 (struct timespec*)current_parameter->value);
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_interval) == 0) {
+            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
+                invalid_parameter_name = current_parameter->key;
+                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
+                continue;
+            }
             inout_state->stop_interval = *(
                 (struct timespec*)current_parameter->value);
         } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_callbacks) == 0) {
@@ -268,7 +294,7 @@ loadavgwatch_status loadavgwatch_open(
 
     // Default values for program starting/stopping related times:
     state->quiet_period_over_start = (struct timespec){
-        .tv_sec = 10 * 60,
+        .tv_sec = 15 * 60,
         .tv_nsec = 0
     };
     state->quiet_period_over_stop = (struct timespec){
