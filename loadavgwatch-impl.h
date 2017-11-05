@@ -35,7 +35,7 @@ extern "C" {
     }
 
 // Used for test related dependency injection:
-typedef int(*impl_clock)(clockid_t clk_id, struct timespec* tp);
+typedef int(*impl_clock)(struct timespec* now);
 typedef const char*(*impl_get_system)(void);
 typedef long(*impl_get_ncpus)(void);
 typedef loadavgwatch_status(*impl_open)(const loadavgwatch_state* state, void** out_impl_state);

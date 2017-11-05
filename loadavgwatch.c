@@ -242,6 +242,15 @@ static loadavgwatch_status read_parameters(
     return LOADAVGWATCH_OK;
 }
 
+/**
+ * If there is a system that does not support clock_gettime(), make
+ * this target implementation specific function.
+ */
+static int loadavgwatch_impl_clock(struct timespec* now)
+{
+    return clock_gettime(CLOCK_MONOTONIC, now);
+}
+
 loadavgwatch_status loadavgwatch_open(
     loadavgwatch_parameter* parameters, loadavgwatch_state** out_state)
 {
@@ -279,7 +288,7 @@ loadavgwatch_status loadavgwatch_open(
     };
 
     // Defaults that mainly tests should be interested in overwriting:
-    state->impl.clock = clock_gettime;
+    state->impl.clock = loadavgwatch_impl_clock;
     state->impl.get_system = loadavgwatch_impl_get_system;
     state->impl.get_ncpus = loadavgwatch_impl_get_ncpus;
     state->impl.open = loadavgwatch_impl_open;
@@ -456,7 +465,7 @@ loadavgwatch_status loadavgwatch_poll(
         return read_status;
     }
     struct timespec now;
-    if (state->impl.clock(CLOCK_MONOTONIC, &now) != 0) {
+    if (state->impl.clock(&now) != 0) {
         PRINT_LOG_MESSAGE(
             state->log_warning, "Unable to read current poll time!");
         *out_result = result;
@@ -504,7 +513,7 @@ loadavgwatch_status loadavgwatch_poll(
 loadavgwatch_status loadavgwatch_register_start(loadavgwatch_state* state)
 {
     assert(state != NULL && "Used uninitialized library!");
-    if (state->impl.clock(CLOCK_MONOTONIC, &state->last_start_time) != 0) {
+    if (state->impl.clock(&state->last_start_time) != 0) {
         PRINT_LOG_MESSAGE(
             state->log_warning, "Unable to register command start time!");
         return LOADAVGWATCH_ERR_CLOCK;
@@ -515,7 +524,7 @@ loadavgwatch_status loadavgwatch_register_start(loadavgwatch_state* state)
 loadavgwatch_status loadavgwatch_register_stop(loadavgwatch_state* state)
 {
     assert(state != NULL && "Used uninitialized library!");
-    if (state->impl.clock(CLOCK_MONOTONIC, &state->last_stop_time) != 0) {
+    if (state->impl.clock(&state->last_stop_time) != 0) {
         PRINT_LOG_MESSAGE(
             state->log_warning, "Unable to register command stop time!");
         return LOADAVGWATCH_ERR_CLOCK;
