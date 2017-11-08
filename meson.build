@@ -17,6 +17,8 @@
 project('loadavgwatch', 'c', default_options : ['c_std=c99'])
 
 executable_files = ['main.c']
+fuzzer_files = ['afl-fuzz-parsers.c']
+
 library_files = ['loadavgwatch.c']
 if target_machine.system() == 'linux'
     library_files += 'loadavgwatch-linux.c'
@@ -28,3 +30,4 @@ endif
 
 lib = static_library('loadavgwatch', library_files, c_args : ['-Werror=pedantic'])
 executable('loadavgwatch', executable_files, link_with : lib, c_args : ['-Werror=pedantic'])
+executable('loadavgwatch-fuzz-parsers', fuzzer_files, c_args : ['-Werror=pedantic'])

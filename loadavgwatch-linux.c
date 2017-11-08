@@ -19,10 +19,11 @@
 #define _XOPEN_SOURCE 600
 
 #include "loadavgwatch-impl.h"
+#include "loadavgwatch-linux-parsers.c"
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/sysinfo.h>
+#include <unistd.h>
 
 typedef struct _state_linux state_linux;
 
@@ -36,17 +37,8 @@ struct _state_linux
 static loadavgwatch_status get_load_average_proc_loadavg(
     state_linux* state, float* out_loadavg)
 {
-    char read_buffer[128];
-    char* line_buffer = fgets(read_buffer, sizeof(read_buffer), state->loadavg_fp);
     fseek(state->loadavg_fp, 0, SEEK_SET);
-    if (line_buffer == NULL) {
-        return LOADAVGWATCH_ERR_READ;
-    }
-    int read_result = sscanf(read_buffer, "%f", out_loadavg);
-    if (read_result != 1) {
-        return LOADAVGWATCH_ERR_PARSE;
-    }
-    return LOADAVGWATCH_OK;
+    return _get_load_average_proc_loadavg(state->loadavg_fp, out_loadavg);
 }
 
 static loadavgwatch_status get_load_average_sysinfo(
@@ -65,31 +57,10 @@ static loadavgwatch_status get_load_average_sysinfo(
 static long get_ncpus_proc_cpuinfo(const char* path)
 {
     FILE* cpuinfo_fp = fopen(path, "r");
-    if (!cpuinfo_fp) {
+    if (cpuinfo_fp == NULL) {
         return -1;
     }
-    char line_buffer[1024];
-    long ncpus = 0;
-    while (fgets(line_buffer, sizeof(line_buffer), cpuinfo_fp)) {
-        // Check that word "processor" is in the beginning of the line:
-        if (strncmp("processor", line_buffer, sizeof("processor") - 1) != 0) {
-            continue;
-        }
-        // First check that there is a colon on the line:
-        char* colon_position = strchr(line_buffer, ':');
-        if (colon_position == NULL) {
-            continue;
-        }
-        // Make sure that "processor" is the full word on the line:
-        if (!(line_buffer[sizeof("processor") - 1] == ' '
-              || line_buffer[sizeof("processor") - 1] == '\t'
-              || line_buffer[sizeof("processor") - 1] == ':')) {
-            continue;
-        }
-        // We have a line that has processor in the beginning and
-        // colon somewhere in it. Register it as a new CPU.
-        ncpus++;
-    }
+    long ncpus = _get_ncpus_proc_cpuinfo(cpuinfo_fp);
     fclose(cpuinfo_fp);
     return ncpus;
 }
@@ -104,35 +75,8 @@ static long get_ncpus_sys_devices(const char* path)
     if (online_cpus_fp == NULL) {
         return -1;
     }
-    // 19369 is the theoretical length that CPU list can have if each
-    // and every one of the maximum 4096 CPUs is listed
-    // individually. That will never be the case, but let's just use
-    // some stack, as this function should be only called once at
-    // start-up.
-    char cpumask_buffer[19370] = {0};
-    size_t read_bytes = fread(
-        cpumask_buffer, 1, sizeof(cpumask_buffer) - 1, online_cpus_fp);
+    long ncpus = _get_ncpus_sys_devices(online_cpus_fp);
     fclose(online_cpus_fp);
-    if (read_bytes == 0) {
-        return -1;
-    }
-    long ncpus = 0;
-    char* saveptr = NULL;
-    char* until_token = strtok_r(cpumask_buffer, ",", &saveptr);
-    while (until_token != NULL) {
-        char* dash_position = strchr(until_token, '-');
-        if (dash_position != NULL) {
-            unsigned long first_cpu;
-            unsigned long last_cpu;
-            if (sscanf(until_token, "%lu-%lu", &first_cpu, &last_cpu) != 2) {
-                return -1;
-            }
-            ncpus += last_cpu - first_cpu + 1;
-        } else {
-            ncpus++;
-        }
-        until_token = strtok_r(NULL, ",", &saveptr);
-    }
     return ncpus;
 }
 

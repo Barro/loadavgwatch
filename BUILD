@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
 
+load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar", "pkg_deb")
+
 cc_library(
     name = "libloadavgwatch_impl",
     srcs = ["loadavgwatch.c", "loadavgwatch-impl.h"] + select({
@@ -21,7 +23,11 @@ cc_library(
         ":darwin_mode": ["loadavgwatch-darwin.c"],
         ":freebsd_mode": ["loadavgwatch-bsd.c"],
     }),
-    hdrs = ["loadavgwatch.h"] + select({
+    hdrs = [
+        "loadavgwatch.h",
+        "main-parsers.c",
+        "loadavgwatch-linux-parsers.c"
+    ] + select({
         # Make included system specific .c files visible to the
         # compilation without compiling them:
         ":linux_mode": [],
@@ -40,6 +46,13 @@ cc_inc_library(
 cc_binary(
     name = "loadavgwatch",
     srcs = ["main.c"],
+    deps = [":libloadavgwatch"],
+    copts = ["--std=c99", "-Werror=pedantic"],
+    licenses = ["reciprocal"],
+)
+cc_binary(
+    name = "loadavgwatch-fuzz-parsers",
+    srcs = ["afl-fuzz-parsers.c"],
     deps = [":libloadavgwatch"],
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],

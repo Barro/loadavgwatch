@@ -19,6 +19,7 @@
 #define _XOPEN_SOURCE 600
 
 #include <loadavgwatch.h>
+#include "main-parsers.c"
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -133,33 +134,9 @@ static void show_version(const program_options* program_options)
     printf("There is NO WARRANTY, to the extent permitted by law.\n");
 }
 
-static size_t timespec_to_string(
-    const struct timespec* value, char* out_result, size_t result_size)
-{
-    const time_t divisors[] = {24 * 60 * 60, 60 * 60, 60, 1};
-    const char* labels[] = {"d", "h", "m", "s"};
-    time_t remainder_seconds = value->tv_sec;
-    char* output = out_result;
-    ssize_t output_remaining = result_size;
-    for (int i = 0; i < sizeof(divisors) / sizeof(divisors[0]); ++i) {
-        time_t quotient = remainder_seconds / divisors[i];
-        remainder_seconds %= divisors[i];
-        if (quotient > 0) {
-            size_t written = snprintf(
-                output, output_remaining, "%ld%s", quotient, labels[i]);
-            output_remaining -= written;
-            output += written;
-            if (output_remaining <= 0) {
-                return result_size - output_remaining;
-            }
-        }
-    }
-    return result_size - output_remaining;
-}
-
 #define PROGRAM_OPTION_TIMESPEC_TO_STRING(option_name) \
     char option_name[32] = ""; \
-    timespec_to_string( \
+    _timespec_to_string( \
         program_options->option_name, option_name, sizeof(option_name))
 
 static void show_help(const program_options* program_options, char* argv[])
@@ -286,13 +263,13 @@ static setup_options_result setup_options(
             ++argument;
             current_argument = argv[argument];
 
-            if (strcmp(current_argument, "0") != 0) {
-                log_error("TODO non-zero timeout", stderr);
+            struct timespec timeout;
+            if (!_string_to_timespec(current_argument, &timeout)) {
+                log_error("Not a valid --timeout value!", stderr);
                 return OPTIONS_FAILURE;
             }
             out_program_options->has_timeout = true;
-            out_program_options->timeout.tv_sec = 0;
-            out_program_options->timeout.tv_nsec = 0;
+            out_program_options->timeout = timeout;
         }
     }
 
