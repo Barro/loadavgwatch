@@ -39,8 +39,8 @@ typedef struct program_options
     const struct timespec* quiet_period_over_stop;
 
     // These values are used inside main() to do actions:
-    const char* start_script;
-    const char* stop_script;
+    const char* start_command;
+    const char* stop_command;
     bool has_timeout;
     struct timespec timeout;
     bool dry_run;
@@ -188,6 +188,16 @@ printf(
 );
 }
 
+/* static bool parse_option_argument( */
+/*     int argc, */
+/*     char* argv[], */
+/*     int current_index, */
+/*     char* out_value, */
+/*     int* next_index) */
+/* { */
+    
+/* } */
+
 static setup_options_result setup_options(
     loadavgwatch_state* state,
     int argc,
@@ -233,6 +243,13 @@ static setup_options_result setup_options(
     out_program_options->quiet_period_over_stop =
         (const struct timespec*)defaults.s.quiet_period_over_stop.value;
 
+    // Default values:
+    out_program_options->start_command = NULL;
+    out_program_options->stop_command = NULL;
+    out_program_options->has_timeout = false;
+    out_program_options->dry_run = false;
+    out_program_options->verbose = false;
+
     /* struct */
     /* { */
     /*     char* show_help; */
@@ -249,6 +266,40 @@ static setup_options_result setup_options(
         if (strcmp(current_argument, "--help") == 0 || strcmp(current_argument, "-h") == 0) {
             show_help(out_program_options, argv);
             return OPTIONS_HELP;
+        }
+        if (strcmp(current_argument, "--start-command") == 0
+            || strcmp(current_argument, "-s") == 0) {
+            if (argument + 1 >= argc) {
+                log_error("No value for --start-command option!", stderr);
+                return OPTIONS_FAILURE;
+            }
+            if (out_program_options->start_command != NULL) {
+                log_error(
+                    "Option --start-command has already been specified!",
+                    stderr);
+                return OPTIONS_FAILURE;
+            }
+
+            ++argument;
+            current_argument = argv[argument];
+            out_program_options->start_command = current_argument;
+        }
+        if (strcmp(current_argument, "--stop-command") == 0
+            || strcmp(current_argument, "-t") == 0) {
+            if (argument + 1 >= argc) {
+                log_error("No value for --stop-command option!", stderr);
+                return OPTIONS_FAILURE;
+            }
+            if (out_program_options->stop_command != NULL) {
+                log_error(
+                    "Option --stop-command has already been specified!",
+                    stderr);
+                return OPTIONS_FAILURE;
+            }
+
+            ++argument;
+            current_argument = argv[argument];
+            out_program_options->stop_command = current_argument;
         }
         if (strcmp(current_argument, "--version") == 0) {
             show_version(out_program_options);
@@ -295,8 +346,6 @@ static int monitor_and_act(
     };
     sigaction(SIGALRM, &alarm_action, NULL);
 
-    const char start_script[] = "date; echo start";
-    const char stop_script[] = "date; echo stop";
     bool running = true;
     // TODO override timeouts:
     bool has_timeout = true;
@@ -315,24 +364,28 @@ static int monitor_and_act(
         }
         if (poll_result.start_count > 0) {
             loadavgwatch_register_start(state);
-            g_child_action = "start";
-            g_child_execution_warning_timeout = 10;
-            alarm(10);
-            int ret = system(start_script);
-            alarm(0);
-            if (ret != EXIT_SUCCESS) {
-                log_warning("Child process exited with non-zero status.", stderr);
+            if (options->start_command != NULL) {
+                g_child_action = "start";
+                g_child_execution_warning_timeout = 10;
+                alarm(10);
+                int ret = system(options->start_command);
+                alarm(0);
+                if (ret != EXIT_SUCCESS) {
+                    log_warning("Child process exited with non-zero status.", stderr);
+                }
             }
         }
         if (poll_result.stop_count > 0) {
             loadavgwatch_register_stop(state);
-            g_child_action = "stop";
-            g_child_execution_warning_timeout = 10;
-            alarm(10);
-            int ret = system(stop_script);
-            alarm(0);
-            if (ret != EXIT_SUCCESS) {
-                log_warning("Child process exited with non-zero status.", stderr);
+            if (options->stop_command != NULL) {
+                g_child_action = "stop";
+                g_child_execution_warning_timeout = 10;
+                alarm(10);
+                int ret = system(options->stop_command);
+                alarm(0);
+                if (ret != EXIT_SUCCESS) {
+                    log_warning("Child process exited with non-zero status.", stderr);
+                }
             }
         }
         int sleep_return = -1;
