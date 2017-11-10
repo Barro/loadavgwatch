@@ -28,6 +28,13 @@
 #include <time.h>
 #include <unistd.h>
 
+#define PRINT_LOG_MESSAGE(log_object, ...)      \
+    { \
+        char log_buffer[256] = {0}; \
+        snprintf(log_buffer, sizeof(log_buffer), __VA_ARGS__); \
+        (log_object).log(log_buffer, (log_object).data); \
+    }
+
 typedef struct program_options
 {
     // Defaults given by the library:
@@ -54,6 +61,10 @@ typedef enum setup_options_result {
     OPTIONS_FAILURE = -1
 } setup_options_result;
 
+static void log_null(const char* message, void* stream)
+{
+}
+
 static void log_info(const char* message, void* stream)
 {
     fprintf((FILE*)stream, "%s\n", message);
@@ -68,6 +79,12 @@ static void log_error(const char* message, void* stream)
 {
     fprintf((FILE*)stream, "ERROR: %s\n", message);
 }
+
+static struct {
+    loadavgwatch_log_object info;
+    loadavgwatch_log_object warning;
+    loadavgwatch_log_object error;
+} g_log;
 
 static unsigned g_child_execution_warning_timeout;
 static const char* g_child_action;
@@ -88,34 +105,32 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
 
 static int init_library(loadavgwatch_state** out_state)
 {
-    loadavgwatch_log_object log_info_callback = {log_info, stdout};
-    loadavgwatch_log_object log_warning_callback = {log_warning, stderr};
-    loadavgwatch_log_object log_error_callback = {log_error, stderr};
     loadavgwatch_parameter init_parameters[] = {
-        {"log-info", &log_info_callback},
-        {"log-warning", &log_warning_callback},
-        {"log-error", &log_error_callback},
+        {"log-warning", &g_log.warning},
+        {"log-error", &g_log.error},
         {NULL, NULL}
     };
     loadavgwatch_status open_ret = loadavgwatch_open(init_parameters, out_state);
     switch (open_ret) {
     case LOADAVGWATCH_ERR_OUT_OF_MEMORY:
-        log_error("Out of memory in library initialization!", stderr);
+        PRINT_LOG_MESSAGE(
+            g_log.error, "Out of memory in library initialization!");
         return EXIT_FAILURE;
     case LOADAVGWATCH_ERR_READ:
-        log_error(
-            "Read error in library initialization! Check file access rights!",
-            stderr);
+        PRINT_LOG_MESSAGE(
+            g_log.error,
+            "Read error in library initialization! Check file access rights!");
         return EXIT_FAILURE;
     case LOADAVGWATCH_ERR_INIT:
     case LOADAVGWATCH_ERR_PARSE:
     case LOADAVGWATCH_ERR_CLOCK:
-        log_error("Unknown library initialization error!", stderr);
+        PRINT_LOG_MESSAGE(
+            g_log.error, "Unknown library initialization error!");
         return EXIT_FAILURE;
     case LOADAVGWATCH_ERR_INVALID_PARAMETER:
-        log_warning(
-            "Invalid library parameter! Is this program linked correctly?",
-            stderr);
+        PRINT_LOG_MESSAGE(
+            g_log.warning,
+            "Invalid library parameter! Is this program linked correctly?");
         break;
     case LOADAVGWATCH_OK:
         break;
@@ -266,9 +281,8 @@ static setup_options_result setup_options(
         if (strcmp(current_argument, "--help") == 0 || strcmp(current_argument, "-h") == 0) {
             show_help(out_program_options, argv);
             return OPTIONS_HELP;
-        }
-        if (strcmp(current_argument, "--start-command") == 0
-            || strcmp(current_argument, "-s") == 0) {
+        } else if (strcmp(current_argument, "--start-command") == 0
+                   || strcmp(current_argument, "-s") == 0) {
             if (argument + 1 >= argc) {
                 log_error("No value for --start-command option!", stderr);
                 return OPTIONS_FAILURE;
@@ -283,9 +297,8 @@ static setup_options_result setup_options(
             ++argument;
             current_argument = argv[argument];
             out_program_options->start_command = current_argument;
-        }
-        if (strcmp(current_argument, "--stop-command") == 0
-            || strcmp(current_argument, "-t") == 0) {
+        } else if (strcmp(current_argument, "--stop-command") == 0
+                   || strcmp(current_argument, "-t") == 0) {
             if (argument + 1 >= argc) {
                 log_error("No value for --stop-command option!", stderr);
                 return OPTIONS_FAILURE;
@@ -300,12 +313,10 @@ static setup_options_result setup_options(
             ++argument;
             current_argument = argv[argument];
             out_program_options->stop_command = current_argument;
-        }
-        if (strcmp(current_argument, "--version") == 0) {
+        } else if (strcmp(current_argument, "--version") == 0) {
             show_version(out_program_options);
             return OPTIONS_VERSION;
-        }
-        if (strcmp(current_argument, "--timeout") == 0) {
+        } else if (strcmp(current_argument, "--timeout") == 0) {
             int next_index = argument + 1;
             if (next_index >= argc) {
                 log_error("No value for --timeout option!", stderr);
@@ -321,10 +332,36 @@ static setup_options_result setup_options(
             }
             out_program_options->has_timeout = true;
             out_program_options->timeout = timeout;
+        } else if (strcmp(current_argument, "--verbose") == 0
+                   || strcmp(current_argument, "-v") == 0) {
+            g_log.info.log = log_info;
+            loadavgwatch_parameter verbose_param[] = {
+                {"log-info", &g_log.info},
+                {NULL, NULL}
+            };
+            loadavgwatch_parameters_set(state, verbose_param);
+            out_program_options->verbose = true;
         }
     }
 
     return OPTIONS_OK;
+}
+
+static void run_command(
+    const char* command, const char* child_action)
+{
+    PRINT_LOG_MESSAGE(g_log.info, "Running %s", command);
+    g_child_action = child_action;
+    g_child_execution_warning_timeout = 10;
+    alarm(10);
+    int ret = system(command);
+    alarm(0);
+    if (ret != EXIT_SUCCESS) {
+        PRINT_LOG_MESSAGE(
+            g_log.warning,
+            "Child process exited with non-zero status %d.",
+            ret);
+    }
 }
 
 static int monitor_and_act(
@@ -348,15 +385,13 @@ static int monitor_and_act(
 
     bool running = true;
     // TODO override timeouts:
-    bool has_timeout = true;
-    struct timespec timeout = { .tv_sec = 30, .tv_nsec = 0 };
     struct timespec start_time;
     if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0) {
         log_error("Unable to register program start time!", stderr);
         return EXIT_FAILURE;
     }
     struct timespec end_time = {
-        .tv_sec = start_time.tv_sec + timeout.tv_sec };
+        .tv_sec = start_time.tv_sec + options->timeout.tv_sec };
     while (running) {
         loadavgwatch_poll_result poll_result;
         if (loadavgwatch_poll(state, &poll_result) != LOADAVGWATCH_OK) {
@@ -365,49 +400,49 @@ static int monitor_and_act(
         if (poll_result.start_count > 0) {
             loadavgwatch_register_start(state);
             if (options->start_command != NULL) {
-                g_child_action = "start";
-                g_child_execution_warning_timeout = 10;
-                alarm(10);
-                int ret = system(options->start_command);
-                alarm(0);
-                if (ret != EXIT_SUCCESS) {
-                    log_warning("Child process exited with non-zero status.", stderr);
-                }
+                run_command(options->start_command, "start");
             }
         }
         if (poll_result.stop_count > 0) {
             loadavgwatch_register_stop(state);
             if (options->stop_command != NULL) {
-                g_child_action = "stop";
-                g_child_execution_warning_timeout = 10;
-                alarm(10);
-                int ret = system(options->stop_command);
-                alarm(0);
-                if (ret != EXIT_SUCCESS) {
-                    log_warning("Child process exited with non-zero status.", stderr);
-                }
+                run_command(options->stop_command, "stop");
             }
         }
-        int sleep_return = -1;
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
-            log_error("Unable to register current time!", stderr);
+            PRINT_LOG_MESSAGE(
+                g_log.error, "Unable to register the current time!");
             return EXIT_FAILURE;
         }
         struct timespec sleep_remaining = sleep_time;
+        if (options->has_timeout
+            && end_time.tv_sec < now.tv_sec + sleep_time.tv_sec) {
+            PRINT_LOG_MESSAGE(g_log.info, "Timeout reached.");
+            running = false;
+            if (end_time.tv_sec <= now.tv_sec) {
+                sleep_remaining.tv_sec = 0;
+            } else {
+                sleep_remaining.tv_sec = now.tv_sec - end_time.tv_sec;
+            }
+        }
+        int sleep_return = -1;
         do {
             sleep_return = nanosleep(&sleep_remaining, &sleep_remaining);
         } while (sleep_return == -1);
-        if (has_timeout && now.tv_sec < end_time.tv_sec) {
-            log_info("Timeout reached.", stdout);
-            running = false;
-        }
     }
     return EXIT_SUCCESS;
 }
 
 int main(int argc, char* argv[])
 {
+    g_log.info.log = log_null;
+    g_log.info.data = stdout;
+    g_log.warning.log = log_warning;
+    g_log.warning.data = stderr;
+    g_log.error.log = log_error;
+    g_log.error.data = stderr;
+
     loadavgwatch_state* state;
     {
         int result = init_library(&state);

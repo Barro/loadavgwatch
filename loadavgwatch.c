@@ -494,7 +494,6 @@ loadavgwatch_status loadavgwatch_poll(
         *out_result = result;
         return LOADAVGWATCH_ERR_CLOCK;
     }
-    PRINT_LOG_MESSAGE(state->log_info, "Load average: %0.2f", load_average);
 
     if (load_average < state->start_load) {
         struct timespec start_difference = time_difference(
@@ -529,6 +528,12 @@ loadavgwatch_status loadavgwatch_poll(
         state->last_over_stop_load = now;
     }
 
+    PRINT_LOG_MESSAGE(
+        state->log_info,
+        "Load average: %0.2f, start %u, stop %u.",
+        load_average,
+        result.start_count,
+        result.stop_count);
     *out_result = result;
     return LOADAVGWATCH_OK;
 }
