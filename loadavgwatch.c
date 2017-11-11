@@ -40,7 +40,8 @@ static void log_null(
 
 static void log_stderr(const char* message, void* data __attribute__((unused)))
 {
-    fprintf(stderr, "%s\n", message);
+    fwrite(message, strlen(message), 1, stderr);
+    fwrite("\n", sizeof("\n") - 1, 1, stderr);
 }
 
 static struct {

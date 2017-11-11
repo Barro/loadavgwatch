@@ -28,11 +28,16 @@
 #include <time.h>
 #include <unistd.h>
 
-#define PRINT_LOG_MESSAGE(log_object, ...)      \
+#define PRINTF_LOG_MESSAGE(log_object, ...)      \
     { \
         char log_buffer[256] = {0}; \
         snprintf(log_buffer, sizeof(log_buffer), __VA_ARGS__); \
         (log_object).log(log_buffer, (log_object).data); \
+    }
+
+#define PRINT_LOG_MESSAGE(log_object, message)      \
+    { \
+        (log_object).log(message, (log_object).data); \
     }
 
 typedef struct program_options
@@ -250,13 +255,15 @@ static setup_options_result setup_options(
         } else if (strcmp(current_argument, "--start-command") == 0
                    || strcmp(current_argument, "-s") == 0) {
             if (argument + 1 >= argc) {
-                log_error("No value for --start-command option!", stderr);
+                PRINT_LOG_MESSAGE(
+                    g_log.error, "No value given for --start-command option!");
                 return OPTIONS_FAILURE;
             }
             if (out_program_options->start_command != NULL) {
-                log_error(
-                    "Option --start-command has already been specified!",
-                    stderr);
+                PRINTF_LOG_MESSAGE(
+                    g_log.error,
+                    "Option --start-command has already been specified with value '%s'",
+                    out_program_options->start_command);
                 return OPTIONS_FAILURE;
             }
 
@@ -266,13 +273,15 @@ static setup_options_result setup_options(
         } else if (strcmp(current_argument, "--stop-command") == 0
                    || strcmp(current_argument, "-t") == 0) {
             if (argument + 1 >= argc) {
-                log_error("No value for --stop-command option!", stderr);
+                PRINT_LOG_MESSAGE(
+                    g_log.error, "No value given for --stop-command option!");
                 return OPTIONS_FAILURE;
             }
             if (out_program_options->stop_command != NULL) {
-                log_error(
-                    "Option --stop-command has already been specified!",
-                    stderr);
+                PRINTF_LOG_MESSAGE(
+                    g_log.error,
+                    "Option --stop-command has already been specified with value '%s'",
+                    out_program_options->stop_command);
                 return OPTIONS_FAILURE;
             }
 
@@ -285,7 +294,8 @@ static setup_options_result setup_options(
         } else if (strcmp(current_argument, "--timeout") == 0) {
             int next_index = argument + 1;
             if (next_index >= argc) {
-                log_error("No value for --timeout option!", stderr);
+                PRINT_LOG_MESSAGE(
+                    g_log.error, "No value given for --timeout option!");
                 return OPTIONS_FAILURE;
             }
             ++argument;
@@ -293,7 +303,10 @@ static setup_options_result setup_options(
 
             struct timespec timeout;
             if (!_string_to_timespec(current_argument, &timeout)) {
-                log_error("Not a valid --timeout value!", stderr);
+                PRINTF_LOG_MESSAGE(
+                    g_log.error,
+                    "'%s' is not a valid --timeout value!",
+                    current_argument);
                 return OPTIONS_FAILURE;
             }
             out_program_options->has_timeout = true;
@@ -312,14 +325,14 @@ static setup_options_result setup_options(
 static void run_command(
     const char* command, const char* child_action)
 {
-    PRINT_LOG_MESSAGE(g_log.info, "Running %s", command);
+    PRINTF_LOG_MESSAGE(g_log.info, "Running %s", command);
     g_child_action = child_action;
     g_child_execution_warning_timeout = 10;
     alarm(10);
     int ret = system(command);
     alarm(0);
     if (ret != EXIT_SUCCESS) {
-        PRINT_LOG_MESSAGE(
+        PRINTF_LOG_MESSAGE(
             g_log.warning,
             "Child process exited with non-zero status %d.",
             ret);
@@ -346,10 +359,10 @@ static int monitor_and_act(
     sigaction(SIGALRM, &alarm_action, NULL);
 
     bool running = true;
-    // TODO override timeouts:
     struct timespec start_time;
     if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0) {
-        log_error("Unable to register program start time!", stderr);
+        PRINT_LOG_MESSAGE(
+            g_log.error, "Unable to register program start time!");
         return EXIT_FAILURE;
     }
     struct timespec end_time = {
@@ -425,8 +438,9 @@ int main(int argc, char* argv[])
     int program_result = monitor_and_act(state, &program_options);
 
     if (loadavgwatch_close(&state) != LOADAVGWATCH_OK) {
-        log_error(
-            "Unable to close the library! This should never happen", stderr);
+        PRINT_LOG_MESSAGE(
+            g_log.error,
+            "Unable to close the library! This should never happen");
         program_result = EXIT_FAILURE;
     }
     return program_result;
