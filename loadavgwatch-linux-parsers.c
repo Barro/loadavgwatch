@@ -18,6 +18,7 @@
 
 #include "loadavgwatch-impl.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static loadavgwatch_status _get_load_average_proc_loadavg(
@@ -66,13 +67,18 @@ static long _get_ncpus_sys_devices(FILE* online_cpus_fp)
 {
     // 19369 is the theoretical length that CPU list can have if each
     // and every one of the maximum 4096 CPUs is listed
-    // individually. That will never be the case, but let's just use
-    // some stack, as this function should be only called once at
-    // start-up.
-    char cpumask_buffer[19370] = {0};
+    // individually. That will never be the case, but as this is a
+    // lazy implementation and this function should be only called
+    // once at start-up, one calloc() is not that bad.
+    const size_t cpumask_buffer_size = 19370;
+    char* cpumask_buffer = calloc(1, cpumask_buffer_size);
+    if (cpumask_buffer == NULL) {
+        return -1;
+    }
     size_t read_bytes = fread(
-        cpumask_buffer, 1, sizeof(cpumask_buffer) - 1, online_cpus_fp);
+        cpumask_buffer, 1, cpumask_buffer_size - 1, online_cpus_fp);
     if (read_bytes == 0) {
+        free(cpumask_buffer);
         return -1;
     }
     long ncpus = 0;
@@ -84,6 +90,7 @@ static long _get_ncpus_sys_devices(FILE* online_cpus_fp)
             unsigned long first_cpu;
             unsigned long last_cpu;
             if (sscanf(until_token, "%lu-%lu", &first_cpu, &last_cpu) != 2) {
+                free(cpumask_buffer);
                 return -1;
             }
             ncpus += last_cpu - first_cpu + 1;
@@ -92,5 +99,6 @@ static long _get_ncpus_sys_devices(FILE* online_cpus_fp)
         }
         until_token = strtok_r(NULL, ",", &saveptr);
     }
+    free(cpumask_buffer);
     return ncpus;
 }
