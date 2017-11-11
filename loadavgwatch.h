@@ -56,8 +56,11 @@ typedef struct loadavgwatch_log_object
     void* data;
 } loadavgwatch_log_object;
 
-loadavgwatch_status loadavgwatch_open(
-    loadavgwatch_parameter* parameters, loadavgwatch_state** out_state);
+loadavgwatch_status loadavgwatch_open(loadavgwatch_state** out_state);
+loadavgwatch_status loadavgwatch_open_logging(
+    loadavgwatch_state** out_state,
+    loadavgwatch_log_object* log_warning,
+    loadavgwatch_log_object* log_error);
 loadavgwatch_status loadavgwatch_parameters_get(
     loadavgwatch_state* state, loadavgwatch_parameter* inout_parameters);
 loadavgwatch_status loadavgwatch_parameters_set(

@@ -43,6 +43,14 @@ static void log_stderr(const char* message, void* data __attribute__((unused)))
     fprintf(stderr, "%s\n", message);
 }
 
+static struct {
+    loadavgwatch_log_object warning;
+    loadavgwatch_log_object error;
+} LOG_DEFAULTS = {
+    .warning = {log_stderr, NULL},
+    .error = {log_stderr, NULL}
+};
+
 static const struct {
     const char* _first;
     const char* system;
@@ -274,8 +282,10 @@ static int loadavgwatch_impl_clock(struct timespec* now)
     return clock_gettime(CLOCK_MONOTONIC, now);
 }
 
-loadavgwatch_status loadavgwatch_open(
-    loadavgwatch_parameter* parameters, loadavgwatch_state** out_state)
+loadavgwatch_status loadavgwatch_open_logging(
+    loadavgwatch_state** out_state,
+    loadavgwatch_log_object* log_warning,
+    loadavgwatch_log_object* log_error)
 {
     *out_state = NULL;
     loadavgwatch_state* state = calloc(1, sizeof(loadavgwatch_state));
@@ -283,11 +293,11 @@ loadavgwatch_status loadavgwatch_open(
         return LOADAVGWATCH_ERR_OUT_OF_MEMORY;
     }
 
-    // Set some defaults that can be overridden by either the using
-    // application or test programs:
+    // Set info log to be initially a null logger. We don't need info
+    // logger in library initialization. At least for now:
     state->log_info.log = log_null;
-    state->log_error.log = log_stderr;
-    state->log_warning.log = log_stderr;
+    state->log_warning = *log_warning;
+    state->log_error = *log_error;
 
     // Calling program will likely want to overwrite these as these
     // are really machine specific:
@@ -317,14 +327,6 @@ loadavgwatch_status loadavgwatch_open(
     state->impl.open = loadavgwatch_impl_open;
     state->impl.close = loadavgwatch_impl_close;
     state->impl.get_load_average = loadavgwatch_impl_get_load_average;
-
-    if (parameters != NULL) {
-        int parameters_result = read_parameters(state, parameters);
-        if (parameters_result != 0) {
-            free(state);
-            return parameters_result;
-        }
-    }
 
     long ncpus = state->impl.get_ncpus();
     if (strlen(state->start_load_str) == 0) {
@@ -370,6 +372,12 @@ loadavgwatch_status loadavgwatch_open(
 
     *out_state = state;
     return LOADAVGWATCH_OK;
+}
+
+loadavgwatch_status loadavgwatch_open(loadavgwatch_state** out_state)
+{
+    return loadavgwatch_open_logging(
+        out_state, &LOG_DEFAULTS.warning, &LOG_DEFAULTS.error);
 }
 
 loadavgwatch_status loadavgwatch_parameters_get(

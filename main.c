@@ -105,12 +105,8 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
 
 static int init_library(loadavgwatch_state** out_state)
 {
-    loadavgwatch_parameter init_parameters[] = {
-        {"log-warning", &g_log.warning},
-        {"log-error", &g_log.error},
-        {NULL, NULL}
-    };
-    loadavgwatch_status open_ret = loadavgwatch_open(init_parameters, out_state);
+    loadavgwatch_status open_ret = loadavgwatch_open_logging(
+        out_state, &g_log.warning, &g_log.error);
     switch (open_ret) {
     case LOADAVGWATCH_ERR_OUT_OF_MEMORY:
         PRINT_LOG_MESSAGE(
