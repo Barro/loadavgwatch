@@ -56,8 +56,8 @@ struct _loadavgwatch_state
     float start_load;
     float stop_load;
 
-    char start_load_str[sizeof("2147483648.00")];
-    char stop_load_str[sizeof("2147483648.00")];
+    loadavgwatch_load start_load_fixed;
+    loadavgwatch_load stop_load_fixed;
 
     struct timespec last_start_time;
     struct timespec last_stop_time;

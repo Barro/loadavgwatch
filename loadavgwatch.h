@@ -24,6 +24,7 @@ extern "C" {
 #endif // #ifdef __cplusplus
 
 #include <stdint.h>
+#include <time.h>
 
 typedef enum loadavgwatch_status
 {
@@ -44,6 +45,12 @@ typedef struct loadavgwatch_parameter
     void* value;
 } loadavgwatch_parameter;
 
+typedef struct loadavgwatch_load
+{
+    uint32_t load;
+    uint32_t scale;
+} loadavgwatch_load;
+
 typedef struct loadavgwatch_poll_result
 {
     uint32_t start_count;
@@ -61,10 +68,37 @@ loadavgwatch_status loadavgwatch_open_logging(
     loadavgwatch_state** out_state,
     loadavgwatch_log_object* log_warning,
     loadavgwatch_log_object* log_error);
-loadavgwatch_status loadavgwatch_parameters_get(
-    loadavgwatch_state* state, loadavgwatch_parameter* inout_parameters);
-loadavgwatch_status loadavgwatch_parameters_set(
-    loadavgwatch_state* inout_state, loadavgwatch_parameter* parameters);
+loadavgwatch_status loadavgwatch_set_log_info(
+    loadavgwatch_state* state, loadavgwatch_log_object* log);
+loadavgwatch_status loadavgwatch_set_log_warning(
+    loadavgwatch_state* state, loadavgwatch_log_object* log);
+loadavgwatch_status loadavgwatch_set_log_error(
+    loadavgwatch_state* state, loadavgwatch_log_object* log);
+loadavgwatch_status loadavgwatch_set_start_load(
+    loadavgwatch_state* state, const loadavgwatch_load* load);
+loadavgwatch_status loadavgwatch_set_start_interval(
+    loadavgwatch_state* state, const struct timespec* interval);
+loadavgwatch_status loadavgwatch_set_quiet_period_over_start(
+    loadavgwatch_state* state, const struct timespec* interval);
+loadavgwatch_status loadavgwatch_set_stop_load(
+    loadavgwatch_state* state, const loadavgwatch_load* load);
+loadavgwatch_status loadavgwatch_set_start_interval(
+    loadavgwatch_state* state, const struct timespec* interval);
+loadavgwatch_status loadavgwatch_set_quiet_period_over_start(
+    loadavgwatch_state* state, const struct timespec* interval);
+
+const char* loadavgwatch_get_system(const loadavgwatch_state* state);
+loadavgwatch_load loadavgwatch_get_start_load(const loadavgwatch_state* state);
+struct timespec loadavgwatch_get_start_interval(
+    const loadavgwatch_state* state);
+struct timespec loadavgwatch_get_quiet_period_over_start(
+    const loadavgwatch_state* state);
+loadavgwatch_load loadavgwatch_get_stop_load(const loadavgwatch_state* state);
+struct timespec loadavgwatch_get_stop_interval(
+    const loadavgwatch_state* state);
+struct timespec loadavgwatch_get_quiet_period_over_stop(
+    const loadavgwatch_state* state);
+
 loadavgwatch_status loadavgwatch_close(loadavgwatch_state** state);
 loadavgwatch_status loadavgwatch_poll(
     loadavgwatch_state* state, loadavgwatch_poll_result* result);

@@ -38,12 +38,12 @@
 typedef struct program_options
 {
     // Defaults given by the library:
-    const char* start_load;
-    const struct timespec* start_interval;
-    const struct timespec* quiet_period_over_start;
-    const char* stop_load;
-    const struct timespec* stop_interval;
-    const struct timespec* quiet_period_over_stop;
+    loadavgwatch_load start_load;
+    struct timespec start_interval;
+    struct timespec quiet_period_over_start;
+    loadavgwatch_load stop_load;
+    struct timespec stop_interval;
+    struct timespec quiet_period_over_stop;
 
     // These values are used inside main() to do actions:
     const char* start_command;
@@ -148,7 +148,7 @@ static void show_version(const program_options* program_options)
 #define PROGRAM_OPTION_TIMESPEC_TO_STRING(option_name) \
     char option_name[32] = ""; \
     _timespec_to_string( \
-        program_options->option_name, option_name, sizeof(option_name))
+        &program_options->option_name, option_name, sizeof(option_name))
 
 static void show_help(const program_options* program_options, char* argv[])
 {
@@ -167,21 +167,23 @@ static void show_help(const program_options* program_options, char* argv[])
 "  -t, --stop-command <command>\n"
 "                       Command to run when we go over the stop load limit.\n"
 );
-printf(
-"  --start-load <value> Maximum load value where we still execute the start command (%s).\n"
-"  --stop-load <value>  Minimum load value where we start executing the stop command (%s).\n",
-program_options->start_load,
-program_options->stop_load
+    float start_load = (double)program_options->start_load.load / program_options->start_load.scale;
+    float stop_load = (double)program_options->stop_load.load / program_options->stop_load.scale;
+    printf(
+"  --start-load <value> Maximum load value where we still execute the start command (%0.2f).\n"
+"  --stop-load <value>  Minimum load value where we start executing the stop command (%0.2f).\n",
+start_load,
+stop_load
 );
 printf(
 "  --quiet-period-over-start <time>\n"
-"                       Do not start new processes for this long (%s) when start load (%s) has been exceeded.\n"
+"                       Do not start new processes for this long (%s) when start load (%0.2f) has been exceeded.\n"
 "  --quiet-period-over-stop <time>\n"
-"                       Do not start new processes for this long (%s) when stop load (%s) has been exceeded.\n",
+"                       Do not start new processes for this long (%s) when stop load (%0.2f) has been exceeded.\n",
 quiet_period_over_start,
-program_options->start_load,
+start_load,
 quiet_period_over_stop,
-program_options->stop_load
+stop_load
 );
 printf(
 "  --start-interval <time>\n"
@@ -215,44 +217,12 @@ static setup_options_result setup_options(
     char* argv[],
     program_options* out_program_options)
 {
-    union {
-        struct _defaults {
-            loadavgwatch_parameter system;
-            loadavgwatch_parameter start_load;
-            loadavgwatch_parameter start_interval;
-            loadavgwatch_parameter quiet_period_over_start;
-            loadavgwatch_parameter stop_load;
-            loadavgwatch_parameter stop_interval;
-            loadavgwatch_parameter quiet_period_over_stop;
-            loadavgwatch_parameter _end;
-        } s;
-        loadavgwatch_parameter array[
-            sizeof(struct _defaults) / sizeof(((struct _defaults*)0)->_end)];
-    } defaults = {
-        .s.system = {"system", NULL},
-        .s.start_load = {"start-load", NULL},
-        .s.start_interval = {"start-interval", NULL},
-        .s.quiet_period_over_start = {"quiet-period-over-start", NULL},
-        .s.stop_load = {"stop-load", NULL},
-        .s.stop_interval = {"stop-interval", NULL},
-        .s.quiet_period_over_stop = {"quiet-period-over-stop", NULL},
-        .s._end = {NULL, NULL}
-    };
-    if (loadavgwatch_parameters_get(state, defaults.array) != LOADAVGWATCH_OK) {
-        log_error("Failed to get the default parameter values", stderr);
-        return OPTIONS_FAILURE;
-    }
-
-    out_program_options->start_load = (const char*)defaults.s.start_load.value;
-    out_program_options->start_interval = (const struct timespec*)
-        defaults.s.start_interval.value;
-    out_program_options->quiet_period_over_start =
-        (const struct timespec*)defaults.s.quiet_period_over_start.value;
-    out_program_options->stop_load = (const char*)defaults.s.stop_load.value;
-    out_program_options->stop_interval = (const struct timespec*)
-        defaults.s.stop_interval.value;
-    out_program_options->quiet_period_over_stop =
-        (const struct timespec*)defaults.s.quiet_period_over_stop.value;
+    out_program_options->start_load = loadavgwatch_get_start_load(state);
+    out_program_options->start_interval = loadavgwatch_get_start_interval(state);
+    out_program_options->quiet_period_over_start = loadavgwatch_get_quiet_period_over_start(state);
+    out_program_options->stop_load = loadavgwatch_get_stop_load(state);
+    out_program_options->stop_interval = loadavgwatch_get_stop_interval(state);
+    out_program_options->quiet_period_over_stop = loadavgwatch_get_quiet_period_over_stop(state);
 
     // Default values:
     out_program_options->start_command = NULL;
@@ -331,11 +301,7 @@ static setup_options_result setup_options(
         } else if (strcmp(current_argument, "--verbose") == 0
                    || strcmp(current_argument, "-v") == 0) {
             g_log.info.log = log_info;
-            loadavgwatch_parameter verbose_param[] = {
-                {"log-info", &g_log.info},
-                {NULL, NULL}
-            };
-            loadavgwatch_parameters_set(state, verbose_param);
+            loadavgwatch_set_log_info(state, &g_log.info);
             out_program_options->verbose = true;
         }
     }

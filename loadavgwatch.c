@@ -51,46 +51,8 @@ static struct {
     .error = {log_stderr, NULL}
 };
 
-static const struct {
-    const char* _first;
-    const char* system;
-    const char* log_info;
-    const char* log_warning;
-    const char* log_error;
-    const char* start_load;
-    const char* start_interval;
-    const char* quiet_period_over_start;
-    const char* stop_load;
-    const char* stop_interval;
-    const char* quiet_period_over_stop;
-    const char* impl_callbacks;
-    const char* _last;
-} VALID_PARAMETERS = {
-    .system = "system",
-
-    .log_info = "log-info",
-    .log_warning = "log-warning",
-    .log_error = "log-error",
-
-    .start_load = "start-load",
-    .start_interval = "start-interval",
-    .quiet_period_over_start = "quiet-period-over-start",
-
-    .stop_load = "stop-load",
-    .stop_interval = "stop-interval",
-    .quiet_period_over_stop = "quiet-period-over-stop",
-
-    // Used for testing:
-    .impl_callbacks = "impl-callbacks",
-};
-
 static void adjust_start_stop_loads(loadavgwatch_state* inout_state)
 {
-    // We have not initialized load values yet:
-    if (strlen(inout_state->start_load_str) == 0
-        || strlen(inout_state->stop_load_str) == 0) {
-        return;
-    }
     // Everything is OK, no adjustment needed.
     if (inout_state->start_load + 1.0 <= inout_state->stop_load) {
         return;
@@ -98,179 +60,143 @@ static void adjust_start_stop_loads(loadavgwatch_state* inout_state)
     float new_start_load = inout_state->start_load - 1.0;
     PRINT_LOG_MESSAGE(
         inout_state->log_warning,
-        "Start load (%s) must be at least one less than the stop "
-        "load (%s). Forcing start load to be %0.2f.",
-        inout_state->start_load_str,
-        inout_state->stop_load_str,
+        "Start load (%0.2f) must be at least one less than the stop "
+        "load (%0.2f). Forcing start load to be %0.2f.",
+        inout_state->start_load,
+        inout_state->stop_load,
         new_start_load);
-    snprintf(
-        inout_state->start_load_str, sizeof(inout_state->start_load_str),
-        "%0.2f", new_start_load);
+    inout_state->start_load = new_start_load;
+    inout_state->start_load_fixed.scale = 256;
+    inout_state->start_load_fixed.load = inout_state->start_load * inout_state->start_load_fixed.scale;
 }
 
 
-static bool check_for_unknown_parameters(
-    loadavgwatch_state* state, const loadavgwatch_parameter* parameters)
+loadavgwatch_status loadavgwatch_set_log_info(
+    loadavgwatch_state* state, loadavgwatch_log_object* log)
 {
-    const loadavgwatch_parameter* current_parameter = parameters;
-    bool all_valid = true;
-    while (current_parameter->key != NULL) {
-        bool current_valid = false;
-        for (const char* const* parameter = &VALID_PARAMETERS._first + 1;
-             parameter < &VALID_PARAMETERS._last;
-             ++parameter) {
-            if (strcmp(current_parameter->key, *parameter) == 0) {
-                current_valid = true;
-                break;
-            }
-        }
-        if (!current_valid) {
-            all_valid = false;
-            PRINT_LOG_MESSAGE(
-                state->log_warning,
-                "Unknown parameter name: %s",
-                current_parameter->key);
-        }
-        current_parameter++;
-    }
-    return all_valid;
-}
-
-static loadavgwatch_status read_parameters(
-    loadavgwatch_state* inout_state, const loadavgwatch_parameter* parameters)
-{
-    const loadavgwatch_parameter* current_parameter = parameters;
-    bool has_unknown = false;
-    loadavgwatch_status return_status = LOADAVGWATCH_OK;
-    const char* invalid_parameter_name = NULL;
-    while (current_parameter->key != NULL) {
-        if (strcmp(current_parameter->key, VALID_PARAMETERS.system) == 0) {
-            // Make system parameter read-only:
-            invalid_parameter_name = current_parameter->key;
-            return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_info) == 0) {
-            inout_state->log_info = *(
-                (loadavgwatch_log_object*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_warning) == 0) {
-            inout_state->log_warning = *(
-                (loadavgwatch_log_object*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_error) == 0) {
-            inout_state->log_error = *(
-                (loadavgwatch_log_object*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_load) == 0) {
-            char* load_value = (char*)current_parameter->value;
-            if (strlen(load_value) > sizeof(inout_state->start_load_str) - 1) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            char* endptr = NULL;
-            float start_load = strtof(load_value, &endptr);
-            if (endptr == current_parameter->value) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            strcpy(inout_state->start_load_str, load_value);
-            inout_state->start_load = start_load;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_load) == 0) {
-            char* load_value = (char*)current_parameter->value;
-            if (strlen(load_value) > sizeof(inout_state->stop_load_str) - 1) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            char* endptr = NULL;
-            float stop_load = strtof(load_value, &endptr);
-            if (endptr == current_parameter->value) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            if (stop_load < 1.0) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            strcpy(inout_state->stop_load_str, load_value);
-            inout_state->stop_load = stop_load;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_start) == 0) {
-            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            inout_state->quiet_period_over_start = *(
-                (struct timespec*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_stop) == 0) {
-            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            inout_state->quiet_period_over_stop = *(
-                (struct timespec*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_interval) == 0) {
-            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            inout_state->start_interval = *(
-                (struct timespec*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_interval) == 0) {
-            if (((struct timespec*)current_parameter->value)->tv_sec > MAX_INTERVAL_SECONDS) {
-                invalid_parameter_name = current_parameter->key;
-                return_status = LOADAVGWATCH_ERR_INVALID_PARAMETER;
-                continue;
-            }
-            inout_state->stop_interval = *(
-                (struct timespec*)current_parameter->value);
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_callbacks) == 0) {
-            loadavgwatch_callbacks* callbacks = current_parameter->value;
-            // Callback overrides enable partial overrides by just setting parameters to NULL.
-            if (callbacks->clock != NULL) {
-                inout_state->impl.clock = callbacks->clock;
-            }
-            // Well system is really not read-only. It's just overridable for unit tests...
-            if (callbacks->get_system != NULL) {
-                inout_state->impl.get_system = callbacks->get_system;
-            }
-            if (callbacks->get_ncpus != NULL) {
-                inout_state->impl.get_ncpus = callbacks->get_ncpus;
-            }
-            if (callbacks->open != NULL) {
-                inout_state->impl.open = callbacks->open;
-            }
-            if (callbacks->close != NULL) {
-                inout_state->impl.close = callbacks->close;
-            }
-            if (callbacks->get_load_average != NULL) {
-                inout_state->impl.get_load_average = callbacks->get_load_average;
-            }
-        } else {
-            // We haven't initialized the logger yet. Register the
-            // problem, but don't do anything yet.
-            has_unknown = true;
-        }
-        current_parameter++;
-    }
-
-    // Here we should have alternative loggers in use if standard
-    // error logging has been overwritten:
-    if (return_status == LOADAVGWATCH_ERR_INVALID_PARAMETER) {
-        assert(invalid_parameter_name != NULL);
-        PRINT_LOG_MESSAGE(
-            inout_state->log_error,
-            "Value for parameter %s was invalid!",
-            invalid_parameter_name);
-        return return_status;
-    }
-
-    if (has_unknown) {
-        check_for_unknown_parameters(inout_state, parameters);
-    }
+    state->log_info = *log;
     return LOADAVGWATCH_OK;
+}
+
+loadavgwatch_status loadavgwatch_set_log_warning(
+    loadavgwatch_state* state, loadavgwatch_log_object* log)
+{
+    state->log_warning = *log;
+    return LOADAVGWATCH_OK;
+}
+
+loadavgwatch_status loadavgwatch_set_log_error(
+    loadavgwatch_state* state, loadavgwatch_log_object* log)
+{
+    state->log_error = *log;
+    return LOADAVGWATCH_OK;
+}
+
+loadavgwatch_status loadavgwatch_set_start_load(
+    loadavgwatch_state* state, const loadavgwatch_load* load)
+{
+    state->start_load = (double)load->load / load->scale;
+    state->start_load_fixed = *load;
+    return LOADAVGWATCH_OK;
+}
+
+const char* loadavgwatch_get_system(const loadavgwatch_state* state)
+{
+    return state->impl.get_system();
+}
+
+loadavgwatch_load loadavgwatch_get_start_load(const loadavgwatch_state* state)
+{
+    return state->start_load_fixed;
+}
+
+struct timespec loadavgwatch_get_start_interval(
+    const loadavgwatch_state* state)
+{
+    return state->start_interval;
+}
+
+struct timespec loadavgwatch_get_quiet_period_over_start(
+    const loadavgwatch_state* state)
+{
+    return state->quiet_period_over_start;
+}
+
+loadavgwatch_load loadavgwatch_get_stop_load(const loadavgwatch_state* state)
+{
+    return state->stop_load_fixed;
+}
+
+struct timespec loadavgwatch_get_stop_interval(
+    const loadavgwatch_state* state)
+{
+    return state->start_interval;
+}
+
+struct timespec loadavgwatch_get_quiet_period_over_stop(
+    const loadavgwatch_state* state)
+{
+    return state->quiet_period_over_stop;
+}
+
+static loadavgwatch_status check_max_interval_set(
+    loadavgwatch_state* state,
+    const char* type,
+    const struct timespec* interval,
+    struct timespec* destination)
+{
+    if (interval->tv_sec > MAX_INTERVAL_SECONDS) {
+        PRINT_LOG_MESSAGE(
+            state->log_error,
+            "Refusing to set %s of %lu seconds that is more than 1 month!",
+            type,
+            interval->tv_sec);
+        return LOADAVGWATCH_ERR_INVALID_PARAMETER;
+    }
+    *destination = *interval;
+    return LOADAVGWATCH_OK;
+}
+
+loadavgwatch_status loadavgwatch_set_start_interval(
+    loadavgwatch_state* state, const struct timespec* interval)
+{
+    return check_max_interval_set(
+        state, "start interval", interval, &state->start_interval);
+}
+
+loadavgwatch_status loadavgwatch_set_quiet_period_over_start(
+    loadavgwatch_state* state, const struct timespec* interval)
+{
+    return check_max_interval_set(
+        state,
+        "quiet period over start",
+        interval,
+        &state->quiet_period_over_start);
+}
+
+loadavgwatch_status loadavgwatch_set_stop_load(
+    loadavgwatch_state* state, const loadavgwatch_load* load)
+{
+    state->stop_load = (double)load->load / load->scale;
+    state->stop_load_fixed = *load;
+    return LOADAVGWATCH_OK;
+}
+
+loadavgwatch_status loadavgwatch_set_stop_interval(
+    loadavgwatch_state* state, const struct timespec* interval)
+{
+    return check_max_interval_set(
+        state, "stop interval", interval, &state->stop_interval);
+}
+
+loadavgwatch_status loadavgwatch_set_quiet_period_over_stop(
+    loadavgwatch_state* state, const struct timespec* interval)
+{
+    return check_max_interval_set(
+        state,
+        "quiet period over stop",
+        interval,
+        &state->quiet_period_over_stop);
 }
 
 /**
@@ -329,39 +255,31 @@ loadavgwatch_status loadavgwatch_open_logging(
     state->impl.get_load_average = loadavgwatch_impl_get_load_average;
 
     long ncpus = state->impl.get_ncpus();
-    if (strlen(state->start_load_str) == 0) {
-        if (ncpus > 0) {
-            state->start_load= (float)(ncpus - 1) + 0.02;
-        } else {
-            state->start_load = 0.02;
-            PRINT_LOG_MESSAGE(
-                state->log_warning,
-                "Could not detect the number of CPUs. "
-                "Using the default start load value for 1 CPU! "
-                "Please set load limits manually!");
-        }
-        snprintf(
-            state->start_load_str, sizeof(state->start_load_str),
-            "%0.2f", state->start_load);
+    if (ncpus > 0) {
+        state->start_load = (float)(ncpus - 1) + 0.02;
+    } else {
+        state->start_load = 0.02;
+        PRINT_LOG_MESSAGE(
+            state->log_warning,
+            "Could not detect the number of CPUs. "
+            "Using the default start load value for 1 CPU! "
+            "Please set load limits manually!");
     }
+    state->start_load_fixed.scale = 256;
+    state->start_load_fixed.load = state->start_load * state->start_load_fixed.scale;
 
-    if (strlen(state->stop_load_str) == 0) {
-        if (ncpus > 0) {
-            state->stop_load = (float)(ncpus) + 0.12;
-        } else {
-            state->stop_load = 1.12;
-            PRINT_LOG_MESSAGE(
-                state->log_warning,
-                "Could not detect the number of CPUs. "
-                "Using the default stop load value for 1 CPU! "
-                "Please set load limits manually!");
-        }
-        snprintf(
-            state->stop_load_str, sizeof(state->stop_load_str),
-            "%0.2f", state->stop_load);
+    if (ncpus > 0) {
+        state->stop_load = (float)(ncpus) + 0.12;
+    } else {
+        state->stop_load = 1.12;
+        PRINT_LOG_MESSAGE(
+            state->log_warning,
+            "Could not detect the number of CPUs. "
+            "Using the default stop load value for 1 CPU! "
+            "Please set load limits manually!");
     }
-
-    adjust_start_stop_loads(state);
+    state->stop_load_fixed.scale = 256;
+    state->stop_load_fixed.load = state->stop_load * state->stop_load_fixed.scale;
 
     void* impl_state = NULL;
     loadavgwatch_status impl_open_result = state->impl.open(state, &impl_state);
@@ -378,54 +296,6 @@ loadavgwatch_status loadavgwatch_open(loadavgwatch_state** out_state)
 {
     return loadavgwatch_open_logging(
         out_state, &LOG_DEFAULTS.warning, &LOG_DEFAULTS.error);
-}
-
-loadavgwatch_status loadavgwatch_parameters_get(
-    loadavgwatch_state* state, loadavgwatch_parameter* inout_parameters)
-{
-    assert(state != NULL && "Used uninitialized library!");
-    if (!check_for_unknown_parameters(state, inout_parameters)) {
-        return LOADAVGWATCH_ERR_INVALID_PARAMETER;
-    }
-    loadavgwatch_parameter* current_parameter = inout_parameters;
-    while (current_parameter->key != NULL) {
-        if (strcmp(current_parameter->key, VALID_PARAMETERS.system) == 0) {
-            current_parameter->value = (char*)state->impl.get_system();
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_info) == 0) {
-            current_parameter->value = &state->log_info;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_warning) == 0) {
-            current_parameter->value = &state->log_warning;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.log_error) == 0) {
-            current_parameter->value = &state->log_error;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_load) == 0) {
-            current_parameter->value = state->start_load_str;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_load) == 0) {
-            current_parameter->value = state->stop_load_str;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_start) == 0) {
-            current_parameter->value = &state->quiet_period_over_start;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.quiet_period_over_stop) == 0) {
-            current_parameter->value = &state->quiet_period_over_stop;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.start_interval) == 0) {
-            current_parameter->value = &state->start_interval;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.stop_interval) == 0) {
-            current_parameter->value = &state->stop_interval;
-        } else if (strcmp(current_parameter->key, VALID_PARAMETERS.impl_callbacks) == 0) {
-            current_parameter->value = &state->impl;
-        } else {
-            assert(false && "We should never reach here!");
-        }
-        current_parameter++;
-    }
-    return LOADAVGWATCH_OK;
-}
-
-loadavgwatch_status loadavgwatch_parameters_set(
-    loadavgwatch_state* inout_state, loadavgwatch_parameter* parameters)
-{
-    assert(inout_state != NULL && "Used uninitialized library!");
-    loadavgwatch_status status = read_parameters(inout_state, parameters);
-    adjust_start_stop_loads(inout_state);
-    return status;
 }
 
 loadavgwatch_status loadavgwatch_close(loadavgwatch_state** state)
@@ -481,6 +351,7 @@ loadavgwatch_status loadavgwatch_poll(
     loadavgwatch_state* state, loadavgwatch_poll_result* out_result)
 {
     assert(state != NULL && "Used uninitialized library!");
+    adjust_start_stop_loads(state);
     // Default no-change result in case the reader does not check the
     // status code of this command:
     loadavgwatch_poll_result result = {
