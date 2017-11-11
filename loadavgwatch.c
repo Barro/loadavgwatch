@@ -130,7 +130,7 @@ loadavgwatch_load loadavgwatch_get_stop_load(const loadavgwatch_state* state)
 struct timespec loadavgwatch_get_stop_interval(
     const loadavgwatch_state* state)
 {
-    return state->start_interval;
+    return state->stop_interval;
 }
 
 struct timespec loadavgwatch_get_quiet_period_over_stop(
