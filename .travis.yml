@@ -21,7 +21,7 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo unzip -d /usr/bin/ "$TRAVIS_BUILD_DIR"/ninja-linux.zip; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://github.com/bazelbuild/bazel/releases/download/"${BAZEL_VERSION}"/bazel_"${BAZEL_VERSION}"-linux-x86_64.deb; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo dpkg -i bazel_"${BAZEL_VERSION}"-linux-x86_64.deb; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install meson bazel; fi
+  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install bazel coreutils meson; fi
 
 osx_image: xcode9.1
 
@@ -31,4 +31,4 @@ compiler:
 
 install: true
 
-script: meson build-meson && ninja -C build-meson && bazel build :all
+script: ./.travis-test.sh
