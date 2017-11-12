@@ -18,6 +18,7 @@
 
 #define _XOPEN_SOURCE 600
 
+#include <assert.h>
 #include <loadavgwatch.h>
 #include "main-parsers.c"
 #include <signal.h>
@@ -42,18 +43,25 @@
 
 typedef struct program_options
 {
-    // Defaults given by the library:
+    // These also include defaults given by the library:
+    const char* arg_start_load;
     loadavgwatch_load start_load;
+    const char* arg_start_interval;
     struct timespec start_interval;
+    const char* arg_quiet_period_over_start;
     struct timespec quiet_period_over_start;
+    const char* arg_stop_load;
     loadavgwatch_load stop_load;
+    const char* arg_stop_interval;
     struct timespec stop_interval;
+    const char* arg_quiet_period_over_stop;
     struct timespec quiet_period_over_stop;
 
     // These values are used inside main() to do actions:
     const char* start_command;
     const char* stop_command;
     bool has_timeout;
+    const char* arg_timeout;
     struct timespec timeout;
     bool dry_run;
     bool verbose;
@@ -65,6 +73,17 @@ typedef enum setup_options_result {
     OPTIONS_VERSION = 2,
     OPTIONS_FAILURE = -1
 } setup_options_result;
+
+typedef struct option_argument {
+    const char* name;
+    const char** previous_value;
+} option_argument;
+
+typedef struct timespec_argument {
+    const char* name;
+    const char* value_str;
+    struct timespec* destination;
+} timespec_argument;
 
 static void log_null(const char* message, void* stream)
 {
@@ -206,15 +225,58 @@ printf(
 );
 }
 
-/* static bool parse_option_argument( */
-/*     int argc, */
-/*     char* argv[], */
-/*     int current_index, */
-/*     char* out_value, */
-/*     int* next_index) */
-/* { */
-    
-/* } */
+static bool parse_option_argument(
+    const char* option_name,
+    const int argc,
+    char* argv[],
+    const int option_index,
+    const char** inout_value,
+    int* out_index)
+{
+    if (*inout_value != NULL) {
+        PRINTF_LOG_MESSAGE(
+            g_log.error,
+            "Option %s has already been specified with value '%s'",
+            option_name,
+            *inout_value);
+        return false;
+    }
+    char* equal_sign = strchr(argv[option_index], '=');
+    if (equal_sign != NULL) {
+        *inout_value = equal_sign + 1;
+        *out_index = option_index;
+        return true;
+    }
+        if (strcmp(option_name, argv[option_index]) != 0) {
+            return false;
+        }
+    int value_index = option_index + 1;
+    if (argc <= value_index) {
+        PRINTF_LOG_MESSAGE(
+            g_log.error,
+            "No value given for %s option!",
+            argv[option_index]);
+        return false;
+    }
+    *inout_value = argv[value_index];
+    *out_index = value_index;
+    return true;
+}
+
+static bool argument_name_matches(
+    const char* wanted_name,
+    const char* current_argument)
+{
+    char* equal_sign = strchr(current_argument, '=');
+    if (equal_sign == NULL) {
+        return strcmp(wanted_name, current_argument) == 0;
+    }
+    if (strstr(current_argument, wanted_name) != current_argument) {
+        return false;
+    }
+    return strncmp(
+        wanted_name, current_argument, equal_sign - current_argument) == 0;
+}
 
 static setup_options_result setup_options(
     loadavgwatch_state* state,
@@ -222,103 +284,155 @@ static setup_options_result setup_options(
     char* argv[],
     program_options* out_program_options)
 {
+    out_program_options->arg_start_load = NULL;
     out_program_options->start_load = loadavgwatch_get_start_load(state);
+    out_program_options->arg_start_interval = NULL;
     out_program_options->start_interval = loadavgwatch_get_start_interval(state);
+    out_program_options->arg_quiet_period_over_start = NULL;
     out_program_options->quiet_period_over_start = loadavgwatch_get_quiet_period_over_start(state);
+    out_program_options->arg_stop_load = NULL;
     out_program_options->stop_load = loadavgwatch_get_stop_load(state);
+    out_program_options->arg_stop_interval = NULL;
     out_program_options->stop_interval = loadavgwatch_get_stop_interval(state);
+    out_program_options->arg_quiet_period_over_stop = NULL;
     out_program_options->quiet_period_over_stop = loadavgwatch_get_quiet_period_over_stop(state);
 
     // Default values:
     out_program_options->start_command = NULL;
     out_program_options->stop_command = NULL;
     out_program_options->has_timeout = false;
+    out_program_options->arg_timeout = NULL;
     out_program_options->dry_run = false;
     out_program_options->verbose = false;
 
-    /* struct */
-    /* { */
-    /*     char* show_help; */
-    /*     char* dry_run; */
-    /*     char* start_load; */
-    /*     char* stop_load; */
-    /*     char* quiet_period_minutes; */
-    /*     char* start_script; */
-    /*     char* stop_script; */
-    /* } command_line_args = { NULL }; */
+    option_argument option_arguments[] = {
+        {"--start-command", &out_program_options->start_command},
+        {"-s", &out_program_options->start_command},
+        {"--stop-command", &out_program_options->stop_command},
+        {"-t", &out_program_options->stop_command},
+        {"--start-load", &out_program_options->arg_start_load},
+        {"--start-interval", &out_program_options->arg_start_interval},
+        {"--quiet-period-over-start", &out_program_options->arg_quiet_period_over_start},
+        {"--stop-load", &out_program_options->arg_stop_load},
+        {"--stop-interval", &out_program_options->arg_stop_interval},
+        {"--quiet-period-over-stop", &out_program_options->arg_quiet_period_over_stop},
+        {"--timeout", &out_program_options->arg_timeout}
+    };
 
     for (int argument = 1; argument < argc; ++argument) {
         char* current_argument = argv[argument];
+        // Setup simple options without arguments:
         if (strcmp(current_argument, "--help") == 0 || strcmp(current_argument, "-h") == 0) {
             show_help(out_program_options, argv);
             return OPTIONS_HELP;
-        } else if (strcmp(current_argument, "--start-command") == 0
-                   || strcmp(current_argument, "-s") == 0) {
-            if (argument + 1 >= argc) {
-                PRINT_LOG_MESSAGE(
-                    g_log.error, "No value given for --start-command option!");
-                return OPTIONS_FAILURE;
-            }
-            if (out_program_options->start_command != NULL) {
-                PRINTF_LOG_MESSAGE(
-                    g_log.error,
-                    "Option --start-command has already been specified with value '%s'",
-                    out_program_options->start_command);
-                return OPTIONS_FAILURE;
-            }
-
-            ++argument;
-            current_argument = argv[argument];
-            out_program_options->start_command = current_argument;
-        } else if (strcmp(current_argument, "--stop-command") == 0
-                   || strcmp(current_argument, "-t") == 0) {
-            if (argument + 1 >= argc) {
-                PRINT_LOG_MESSAGE(
-                    g_log.error, "No value given for --stop-command option!");
-                return OPTIONS_FAILURE;
-            }
-            if (out_program_options->stop_command != NULL) {
-                PRINTF_LOG_MESSAGE(
-                    g_log.error,
-                    "Option --stop-command has already been specified with value '%s'",
-                    out_program_options->stop_command);
-                return OPTIONS_FAILURE;
-            }
-
-            ++argument;
-            current_argument = argv[argument];
-            out_program_options->stop_command = current_argument;
-        } else if (strcmp(current_argument, "--version") == 0) {
-            show_version(out_program_options);
-            return OPTIONS_VERSION;
-        } else if (strcmp(current_argument, "--timeout") == 0) {
-            int next_index = argument + 1;
-            if (next_index >= argc) {
-                PRINT_LOG_MESSAGE(
-                    g_log.error, "No value given for --timeout option!");
-                return OPTIONS_FAILURE;
-            }
-            ++argument;
-            current_argument = argv[argument];
-
-            struct timespec timeout;
-            if (!_string_to_timespec(current_argument, &timeout)) {
-                PRINTF_LOG_MESSAGE(
-                    g_log.error,
-                    "'%s' is not a valid --timeout value!",
-                    current_argument);
-                return OPTIONS_FAILURE;
-            }
-            out_program_options->has_timeout = true;
-            out_program_options->timeout = timeout;
         } else if (strcmp(current_argument, "--verbose") == 0
                    || strcmp(current_argument, "-v") == 0) {
             g_log.info.log = log_info;
             loadavgwatch_set_log_info(state, &g_log.info);
             out_program_options->verbose = true;
+            continue;
+        } else if (strcmp(current_argument, "--dry-run") == 0) {
+            assert(false && "TODO --dry-run");
+            out_program_options->dry_run = true;
+            continue;
+        } else if (strcmp(current_argument, "--version") == 0) {
+            show_version(out_program_options);
+            return OPTIONS_VERSION;
+        }
+        bool known_option = false;
+        // Setup argument values for options with arguments:
+        for (int option_index = 0;
+             option_index < sizeof(option_arguments) / sizeof(option_arguments[0]);
+             ++option_index) {
+            option_argument* current_option = &option_arguments[option_index];
+            if (argument_name_matches(current_option->name, current_argument)) {
+                if (!parse_option_argument(
+                        current_option->name,
+                        argc,
+                        argv,
+                        argument,
+                        current_option->previous_value,
+                        &argument)) {
+                    return OPTIONS_FAILURE;
+                }
+                known_option = true;
+                break;
+            }
+        }
+        if (!known_option) {
+            PRINTF_LOG_MESSAGE(
+                g_log.error, "Unknown argument '%s'!", current_argument);
+            return OPTIONS_FAILURE;
         }
     }
 
+    timespec_argument timespec_arguments[] = {
+        {"--start-interval",
+         out_program_options->arg_start_interval,
+         &out_program_options->start_interval},
+        {"--quiet-period-over-start",
+         out_program_options->arg_quiet_period_over_start,
+         &out_program_options->quiet_period_over_start},
+        {"--stop-interval",
+         out_program_options->arg_stop_interval,
+         &out_program_options->stop_interval},
+        {"--quiet-period-over-stop",
+         out_program_options->arg_quiet_period_over_stop,
+         &out_program_options->quiet_period_over_stop},
+        {"--timeout",
+         out_program_options->arg_timeout,
+         &out_program_options->timeout}
+    };
+
+    for (int timespec_index = 0;
+         timespec_index < sizeof(timespec_arguments) / sizeof(timespec_arguments[0]);
+         ++timespec_index) {
+
+        timespec_argument* argument = &timespec_arguments[timespec_index];
+        if (argument->value_str == NULL) {
+            continue;
+        }
+        if (!_string_to_timespec(argument->value_str, argument->destination)) {
+            PRINTF_LOG_MESSAGE(
+                g_log.error,
+                "'%s' is not a valid %s value!",
+                argument->value_str,
+                argument->name);
+            return OPTIONS_FAILURE;
+        }
+    }
+
+    if (out_program_options->arg_start_load != NULL) {
+        assert(false && "TODO");
+        loadavgwatch_set_start_load(
+            state, &out_program_options->start_load);
+    }
+    if (out_program_options->arg_start_interval != NULL) {
+        loadavgwatch_set_start_interval(
+            state, &out_program_options->start_interval);
+    }
+    if (out_program_options->arg_quiet_period_over_start != NULL) {
+        loadavgwatch_set_quiet_period_over_start(
+            state, &out_program_options->quiet_period_over_start);
+    }
+
+    if (out_program_options->arg_stop_load != NULL) {
+        assert(false && "TODO");
+        loadavgwatch_set_stop_load(
+            state, &out_program_options->stop_load);
+    }
+    if (out_program_options->arg_stop_interval != NULL) {
+        loadavgwatch_set_stop_interval(
+            state, &out_program_options->stop_interval);
+    }
+    if (out_program_options->arg_quiet_period_over_stop != NULL) {
+        loadavgwatch_set_quiet_period_over_stop(
+            state, &out_program_options->quiet_period_over_stop);
+    }
+
+    if (out_program_options->arg_timeout != NULL) {
+        out_program_options->has_timeout = true;
+    }
     return OPTIONS_OK;
 }
 
@@ -339,26 +453,46 @@ static void run_command(
     }
 }
 
+static const struct timespec* min_timespec(
+    const struct timespec* left, const struct timespec* right)
+{
+    if (left->tv_sec < right->tv_sec) {
+        return left;
+    }
+    if (right->tv_sec < left->tv_sec) {
+        return right;
+    }
+    if (left->tv_nsec < right->tv_nsec) {
+        return left;
+    }
+    return right;
+}
+
 static int monitor_and_act(
     loadavgwatch_state* state, program_options* options)
 {
     // 3 pollings in 1 minute should result in high enough default
     // polling rate to catch relatively soon 1 minute load average
     // changes.
-    struct timespec sleep_time = {
+    static const struct timespec default_sleep_time = {
         .tv_sec = 20,
         .tv_nsec = 0
     };
-    // If start or stop interval is smaller than the default sleep
-    // time, adjust it down.
-    // TODO...
+    // Make sure that we don't sleep more than what makes it possible
+    // to start new processes. TODO alternative algorithm to determine
+    // if we should start new processes or not based on load
+    // differential between previous measurement point:
+    struct timespec sleep_time = *min_timespec(
+        &default_sleep_time,
+        min_timespec(
+            &options->start_interval,
+            &options->stop_interval));
 
     struct sigaction alarm_action = {
         .sa_sigaction = alarm_handler,
     };
     sigaction(SIGALRM, &alarm_action, NULL);
 
-    bool running = true;
     struct timespec start_time;
     if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0) {
         PRINT_LOG_MESSAGE(
@@ -367,6 +501,8 @@ static int monitor_and_act(
     }
     struct timespec end_time = {
         .tv_sec = start_time.tv_sec + options->timeout.tv_sec };
+
+    bool running = true;
     while (running) {
         loadavgwatch_poll_result poll_result;
         if (loadavgwatch_poll(state, &poll_result) != LOADAVGWATCH_OK) {
@@ -393,12 +529,12 @@ static int monitor_and_act(
         struct timespec sleep_remaining = sleep_time;
         if (options->has_timeout
             && end_time.tv_sec < now.tv_sec + sleep_time.tv_sec) {
-            PRINT_LOG_MESSAGE(g_log.info, "Timeout reached.");
+            PRINT_LOG_MESSAGE(g_log.info, "Timeout reached!");
             running = false;
             if (end_time.tv_sec <= now.tv_sec) {
                 sleep_remaining.tv_sec = 0;
             } else {
-                sleep_remaining.tv_sec = now.tv_sec - end_time.tv_sec;
+                sleep_remaining.tv_sec = end_time.tv_sec - now.tv_sec;
             }
         }
         int sleep_return = -1;

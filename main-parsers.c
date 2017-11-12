@@ -102,6 +102,10 @@ static bool _string_to_timespec(
     if (*current_start != '\0') {
         return false;
     }
+    // We got an empty string as timespec value:
+    if (current_start == time_str) {
+        return false;
+    }
     out_result->tv_sec = current_seconds;
     out_result->tv_nsec = 0;
     return true;

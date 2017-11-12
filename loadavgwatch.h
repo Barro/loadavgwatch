@@ -82,9 +82,9 @@ loadavgwatch_status loadavgwatch_set_quiet_period_over_start(
     loadavgwatch_state* state, const struct timespec* interval);
 loadavgwatch_status loadavgwatch_set_stop_load(
     loadavgwatch_state* state, const loadavgwatch_load* load);
-loadavgwatch_status loadavgwatch_set_start_interval(
+loadavgwatch_status loadavgwatch_set_stop_interval(
     loadavgwatch_state* state, const struct timespec* interval);
-loadavgwatch_status loadavgwatch_set_quiet_period_over_start(
+loadavgwatch_status loadavgwatch_set_quiet_period_over_stop(
     loadavgwatch_state* state, const struct timespec* interval);
 
 const char* loadavgwatch_get_system(const loadavgwatch_state* state);
