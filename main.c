@@ -85,23 +85,44 @@ typedef struct timespec_argument {
     struct timespec* destination;
 } timespec_argument;
 
+static void write_time_prefix(FILE* stream)
+{
+    const char* format = "%H:%M:%S%z";
+    struct timespec now;
+    assert(clock_gettime(CLOCK_REALTIME, &now) == 0);
+    struct tm current_time;
+    struct tm* current_time_p = localtime_r(&now.tv_sec, &current_time);
+    assert(current_time_p != NULL);
+    char date[] = "00:00:00+0000";
+    size_t printed = strftime(date, sizeof(date), format, current_time_p);
+    assert(printed > 0);
+    fwrite(date, printed, 1, stream);
+    fwrite(" ", 1, 1, stream);
+}
+
 static void log_null(const char* message, void* stream)
 {
 }
 
-static void log_info(const char* message, void* stream)
+static void log_message(const char* message, void* stream)
 {
-    fprintf((FILE*)stream, "%s\n", message);
+    FILE* write_stream = (FILE*)stream;
+    write_time_prefix(write_stream);
+    fprintf(write_stream, "%s\n", message);
 }
 
 static void log_warning(const char* message, void* stream)
 {
-    fprintf((FILE*)stream, "warning: %s\n", message);
+    FILE* write_stream = (FILE*)stream;
+    write_time_prefix(write_stream);
+    fprintf(write_stream, "warning: %s\n", message);
 }
 
 static void log_error(const char* message, void* stream)
 {
-    fprintf((FILE*)stream, "ERROR: %s\n", message);
+    FILE* write_stream = (FILE*)stream;
+    write_time_prefix(write_stream);
+    fprintf(write_stream, "ERROR: %s\n", message);
 }
 
 static struct {
@@ -327,12 +348,11 @@ static setup_options_result setup_options(
             return OPTIONS_HELP;
         } else if (strcmp(current_argument, "--verbose") == 0
                    || strcmp(current_argument, "-v") == 0) {
-            g_log.info.log = log_info;
+            g_log.info.log = log_message;
             loadavgwatch_set_log_info(state, &g_log.info);
             out_program_options->verbose = true;
             continue;
         } else if (strcmp(current_argument, "--dry-run") == 0) {
-            assert(false && "TODO --dry-run");
             out_program_options->dry_run = true;
             continue;
         } else if (strcmp(current_argument, "--version") == 0) {
@@ -511,13 +531,23 @@ static int monitor_and_act(
         if (poll_result.start_count > 0) {
             loadavgwatch_register_start(state);
             if (options->start_command != NULL) {
-                run_command(options->start_command, "start");
+                if (options->dry_run) {
+                    PRINTF_LOG_MESSAGE(
+                        g_log.info, "Running: %s", options->start_command);
+                } else {
+                    run_command(options->start_command, "start");
+                }
             }
         }
         if (poll_result.stop_count > 0) {
             loadavgwatch_register_stop(state);
             if (options->stop_command != NULL) {
-                run_command(options->stop_command, "stop");
+                if (options->dry_run) {
+                    PRINTF_LOG_MESSAGE(
+                        g_log.info, "Running: %s", options->stop_command);
+                } else {
+                    run_command(options->stop_command, "stop");
+                }
             }
         }
         struct timespec now;

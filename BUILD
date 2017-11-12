@@ -14,8 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
 
-load("@bazel_tools//tools/build_defs/pkg:pkg.bzl", "pkg_tar", "pkg_deb")
-
 cc_library(
     name = "libloadavgwatch_impl",
     srcs = ["loadavgwatch.c", "loadavgwatch-impl.h"] + select({
