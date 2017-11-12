@@ -18,28 +18,34 @@
 
 #define _XOPEN_SOURCE 600
 
+#include "main-parsers.c"
 #include <assert.h>
 #include <loadavgwatch.h>
-#include "main-parsers.c"
 #include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
 
-#define PRINTF_LOG_MESSAGE(log_object, ...)      \
-    { \
-        char log_buffer[256] = {0}; \
-        snprintf(log_buffer, sizeof(log_buffer), __VA_ARGS__); \
-        (log_object).log(log_buffer, (log_object).data); \
-    }
+static inline void PRINTF_LOG_MESSAGE(
+    loadavgwatch_log_object* log_object, const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    char log_buffer[256] = {0};
+    vsnprintf(log_buffer, sizeof(log_buffer), format, args);
+    log_object->log(log_buffer, log_object->data);
+    va_end(args);
+}
 
-#define PRINT_LOG_MESSAGE(log_object, message)      \
-    { \
-        (log_object).log(message, (log_object).data); \
-    }
+static inline void PRINT_LOG_MESSAGE(
+    loadavgwatch_log_object* log_object, const char* message)
+{
+    log_object->log(message, log_object->data);
+}
 
 typedef struct program_options
 {
@@ -126,9 +132,12 @@ static void log_error(const char* message, void* stream)
 }
 
 static struct {
-    loadavgwatch_log_object info;
-    loadavgwatch_log_object warning;
-    loadavgwatch_log_object error;
+    loadavgwatch_log_object info_obj;
+    loadavgwatch_log_object* info;
+    loadavgwatch_log_object warning_obj;
+    loadavgwatch_log_object* warning;
+    loadavgwatch_log_object error_obj;
+    loadavgwatch_log_object* error;
 } g_log;
 
 static unsigned g_child_execution_warning_timeout;
@@ -151,7 +160,7 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
 static int init_library(loadavgwatch_state** out_state)
 {
     loadavgwatch_status open_ret = loadavgwatch_open_logging(
-        out_state, &g_log.warning, &g_log.error);
+        out_state, g_log.warning, g_log.error);
     switch (open_ret) {
     case LOADAVGWATCH_ERR_OUT_OF_MEMORY:
         PRINT_LOG_MESSAGE(
@@ -348,8 +357,8 @@ static setup_options_result setup_options(
             return OPTIONS_HELP;
         } else if (strcmp(current_argument, "--verbose") == 0
                    || strcmp(current_argument, "-v") == 0) {
-            g_log.info.log = log_message;
-            loadavgwatch_set_log_info(state, &g_log.info);
+            g_log.info_obj.log = log_message;
+            loadavgwatch_set_log_info(state, g_log.info);
             out_program_options->verbose = true;
             continue;
         } else if (strcmp(current_argument, "--dry-run") == 0) {
@@ -459,7 +468,7 @@ static setup_options_result setup_options(
 static void run_command(
     const char* command, const char* child_action)
 {
-    PRINTF_LOG_MESSAGE(g_log.info, "Running %s", command);
+    PRINTF_LOG_MESSAGE(g_log.info, "Running command: %s", command);
     g_child_action = child_action;
     g_child_execution_warning_timeout = 10;
     alarm(10);
@@ -577,12 +586,15 @@ static int monitor_and_act(
 
 int main(int argc, char* argv[])
 {
-    g_log.info.log = log_null;
-    g_log.info.data = stdout;
-    g_log.warning.log = log_warning;
-    g_log.warning.data = stderr;
-    g_log.error.log = log_error;
-    g_log.error.data = stderr;
+    g_log.info_obj.log = log_null;
+    g_log.info_obj.data = stdout;
+    g_log.info = &g_log.info_obj;
+    g_log.warning_obj.log = log_warning;
+    g_log.warning_obj.data = stderr;
+    g_log.warning = &g_log.warning_obj;
+    g_log.error_obj.log = log_error;
+    g_log.error_obj.data = stderr;
+    g_log.error = &g_log.error_obj;
 
     loadavgwatch_state* state;
     {

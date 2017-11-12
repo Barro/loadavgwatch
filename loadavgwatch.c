@@ -75,21 +75,21 @@ static void adjust_start_stop_loads(loadavgwatch_state* inout_state)
 loadavgwatch_status loadavgwatch_set_log_info(
     loadavgwatch_state* state, loadavgwatch_log_object* log)
 {
-    state->log_info = *log;
+    state->log_info_obj = *log;
     return LOADAVGWATCH_OK;
 }
 
 loadavgwatch_status loadavgwatch_set_log_warning(
     loadavgwatch_state* state, loadavgwatch_log_object* log)
 {
-    state->log_warning = *log;
+    state->log_warning_obj = *log;
     return LOADAVGWATCH_OK;
 }
 
 loadavgwatch_status loadavgwatch_set_log_error(
     loadavgwatch_state* state, loadavgwatch_log_object* log)
 {
-    state->log_error = *log;
+    state->log_error_obj = *log;
     return LOADAVGWATCH_OK;
 }
 
@@ -222,12 +222,12 @@ loadavgwatch_status loadavgwatch_open_logging(
 
     // Set info log to be initially a null logger. We don't need info
     // logger in library initialization. At least for now:
-    state->log_info.log = log_null;
-    state->log_warning = *log_warning;
-    state->log_error = *log_error;
-
-    // Calling program will likely want to overwrite these as these
-    // are really machine specific:
+    state->log_info_obj.log = log_null;
+    state->log_info = &state->log_info_obj;
+    state->log_warning_obj = *log_warning;
+    state->log_error = &state->log_warning_obj;
+    state->log_error_obj = *log_error;
+    state->log_error = &state->log_error_obj;
 
     // Default values for program starting/stopping related times:
     state->quiet_period_over_start = (struct timespec){

@@ -24,15 +24,20 @@ extern "C" {
 #endif // #ifdef __cplusplus
 
 #include "loadavgwatch.h"
+#include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
 
-#define PRINT_LOG_MESSAGE(log_object, ...)      \
-    { \
-        char log_buffer[256] = {0}; \
-        snprintf(log_buffer, sizeof(log_buffer), __VA_ARGS__); \
-        (log_object).log(log_buffer, (log_object).data); \
-    }
+static inline void PRINT_LOG_MESSAGE(
+    loadavgwatch_log_object* log_object, const char* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    char log_buffer[256] = {0};
+    vsnprintf(log_buffer, sizeof(log_buffer), format, args);
+    log_object->log(log_buffer, log_object->data);
+    va_end(args);
+}
 
 // Used for test related dependency injection:
 typedef int(*impl_clock)(struct timespec* now);
@@ -69,9 +74,12 @@ struct _loadavgwatch_state
     struct timespec start_interval;
     struct timespec stop_interval;
 
-    loadavgwatch_log_object log_info;
-    loadavgwatch_log_object log_error;
-    loadavgwatch_log_object log_warning;
+    loadavgwatch_log_object log_info_obj;
+    loadavgwatch_log_object* log_info;
+    loadavgwatch_log_object log_warning_obj;
+    loadavgwatch_log_object* log_warning;
+    loadavgwatch_log_object log_error_obj;
+    loadavgwatch_log_object* log_error;
 
     loadavgwatch_callbacks impl;
 
