@@ -293,6 +293,31 @@ static bool parse_option_argument(
     return true;
 }
 
+static bool parse_load_argument(
+    const char* argument_name,
+    const char* argument_str,
+    loadavgwatch_load* out_load)
+{
+    char* endptr = NULL;
+    double load = strtod(argument_str, &endptr);
+    if (load < 0.0) {
+        PRINTF_LOG_MESSAGE(
+            g_log.error,
+            "%s can not be negative (%s)!",
+            argument_name,
+            argument_str);
+        return false;
+    }
+    if (endptr - argument_str != strlen(argument_str)) {
+        PRINTF_LOG_MESSAGE(
+            g_log.error, "Invalid %s: %s", argument_name, argument_str);
+        return false;
+    }
+    out_load->load = 100 * load;
+    out_load->scale = 100;
+    return true;
+}
+
 static bool argument_name_matches(
     const char* wanted_name,
     const char* current_argument)
@@ -432,7 +457,12 @@ static setup_options_result setup_options(
     }
 
     if (out_program_options->arg_start_load != NULL) {
-        assert(false && "TODO");
+        if (!parse_load_argument(
+                "--start-load",
+                out_program_options->arg_start_load,
+                &out_program_options->start_load)) {
+            return OPTIONS_FAILURE;
+        }
         loadavgwatch_set_start_load(
             state, &out_program_options->start_load);
     }
@@ -446,7 +476,12 @@ static setup_options_result setup_options(
     }
 
     if (out_program_options->arg_stop_load != NULL) {
-        assert(false && "TODO");
+        if (!parse_load_argument(
+                "--stop-load",
+                out_program_options->arg_stop_load,
+                &out_program_options->stop_load)) {
+            return OPTIONS_FAILURE;
+        }
         loadavgwatch_set_stop_load(
             state, &out_program_options->stop_load);
     }

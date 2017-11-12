@@ -58,6 +58,7 @@ static void adjust_start_stop_loads(loadavgwatch_state* inout_state)
     if (inout_state->start_load + 1.0 <= inout_state->stop_load) {
         return;
     }
+    assert(false && "TODO revamp this whole assumption!");
     float new_start_load = inout_state->start_load - 1.0;
     PRINT_LOG_MESSAGE(
         inout_state->log_warning,
@@ -70,7 +71,6 @@ static void adjust_start_stop_loads(loadavgwatch_state* inout_state)
     inout_state->start_load_fixed.scale = 256;
     inout_state->start_load_fixed.load = inout_state->start_load * inout_state->start_load_fixed.scale;
 }
-
 
 loadavgwatch_status loadavgwatch_set_log_info(
     loadavgwatch_state* state, loadavgwatch_log_object* log)
@@ -225,7 +225,7 @@ loadavgwatch_status loadavgwatch_open_logging(
     state->log_info_obj.log = log_null;
     state->log_info = &state->log_info_obj;
     state->log_warning_obj = *log_warning;
-    state->log_error = &state->log_warning_obj;
+    state->log_warning = &state->log_warning_obj;
     state->log_error_obj = *log_error;
     state->log_error = &state->log_error_obj;
 
