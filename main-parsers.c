@@ -63,8 +63,8 @@ static bool _string_to_timespec(
          label_id < max_label_id && *current_start != '\0';
          label_id++) {
         char* endptr = NULL;
-        long label_value = strtol(current_start, &endptr, 10);
-        if (label_value < 0) {
+        double label_value = strtod(current_start, &endptr);
+        if (label_value < 0.0) {
             return false;
         }
         if (endptr == current_start) {

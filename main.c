@@ -255,6 +255,22 @@ printf(
 );
 }
 
+static void show_values(const program_options* program_options)
+{
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(quiet_period_over_start);
+    PRINTF_LOG_MESSAGE(
+        g_log.info, "quiet-max-start=%s", quiet_period_over_start);
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(quiet_period_over_stop);
+    PRINTF_LOG_MESSAGE(
+        g_log.info, "quiet-min-stop=%s", quiet_period_over_stop);
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(start_interval);
+    PRINTF_LOG_MESSAGE(
+        g_log.info, "start-interval=%s", start_interval);
+    PROGRAM_OPTION_TIMESPEC_TO_STRING(stop_interval);
+    PRINTF_LOG_MESSAGE(
+        g_log.info, "stop-interval=%s", stop_interval);
+}
+
 static bool parse_option_argument(
     const char* option_name,
     const int argc,
@@ -497,6 +513,7 @@ static setup_options_result setup_options(
     if (out_program_options->arg_timeout != NULL) {
         out_program_options->has_timeout = true;
     }
+
     return OPTIONS_OK;
 }
 
@@ -648,6 +665,7 @@ int main(int argc, char* argv[])
             return EXIT_SUCCESS;
         }
     }
+    show_values(&program_options);
     int program_result = monitor_and_act(state, &program_options);
 
     if (loadavgwatch_close(&state) != LOADAVGWATCH_OK) {
