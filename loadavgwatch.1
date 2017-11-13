@@ -1,0 +1,48 @@
+.TH LOADAVGWATCH 1
+.SH NAME
+loadavgwatch \- executes commands based on the system load
+.SH SYNOPSIS
+.B loadavgwatch
+[\fIOPTION\fR]...
+.SH DESCRIPTION
+.B loadavgwatch
+executes different commands depending if the 1 minute system load
+average is under or over pre-specified limits.
+.SH OPTIONS
+Mandatory arguments for long options are mandatory also for short options:
+.TP
+.BR \-s ", " \-\-start-command =\fICOMMAND\fR
+Command to execute while the system load does not exceed the
+\fB\-\-max\-start\fR load value.
+.TP
+.BR \-t ", " \-\-stop-command =\fICOMMAND\fR
+Command to execute while the system load exceeds the
+\fB\-\-min\-stop\fR load value.
+.TP
+.BR \-\-max\-start=\fILOAD\fR
+The maximum load value where we still execute the command specified
+with \fB\-\-start\-command\fR.
+.TP
+.BR \-\-min\-stop=\fILOAD\fR
+The minimum load value where we start executing the command specified
+with \fB\-\-stop\-command\fR.
+.TP
+.BR \-\-quiet\-max\-start =\fITIME\fR
+Wait for \fITIME\fR before trying to execute start commands after the
+load goes under \fB\-\-max\-start\fR load value.
+.TP
+.BR \-\-quiet\-min\-stop =\fITIME\fR
+Wait for \fITIME\fR before trying to execute start commands after the
+load goes under the minimum stop load value. This is likely higher
+than the maximum start load, so the time limit from
+\fB\-\-quiet\-max\-start\fR switch applies.
+.SH NOTES
+Load average is an approximation on how busy the system is and can be
+used to take advantage of free CPU cycles on the machine without
+disturbing its use. Although load average is not strictly related to
+CPU usage, it gives a type of an indication how much free
+computational capacity the machine has. Example of things that can
+increase the load average but not meaningfully increase CPU usage are
+reads and writes from and to the network and the disk.
+.SH EXAMPLE
+TODO

@@ -224,16 +224,16 @@ static void show_help(const program_options* program_options, char* argv[])
     float start_load = (double)program_options->start_load.load / program_options->start_load.scale;
     float stop_load = (double)program_options->stop_load.load / program_options->stop_load.scale;
     printf(
-"  --start-load <value> Maximum load value where we still execute the start command (%0.2f).\n"
-"  --stop-load <value>  Minimum load value where we start executing the stop command (%0.2f).\n",
+"  --max-start <value>  Maximum load value where we still execute the start command (%0.2f).\n"
+"  --min-stop <value>   Minimum load value where we start executing the stop command (%0.2f).\n",
 start_load,
 stop_load
 );
 printf(
-"  --quiet-period-over-start <time>\n"
-"                       Do not start new processes for this long (%s) when start load (%0.2f) has been exceeded.\n"
-"  --quiet-period-over-stop <time>\n"
-"                       Do not start new processes for this long (%s) when stop load (%0.2f) has been exceeded.\n",
+"  --quiet-max-start <time>\n"
+"                       Do not start new processes for this long (%s) when the maximum start load (%0.2f) has been exceeded.\n"
+"  --quiet-min-stop <time>\n"
+"                       Do not start new processes for this long (%s) when the minimum stop load (%0.2f) has been exceeded.\n",
 quiet_period_over_start,
 start_load,
 quiet_period_over_stop,
@@ -365,12 +365,12 @@ static setup_options_result setup_options(
         {"-s", &out_program_options->start_command},
         {"--stop-command", &out_program_options->stop_command},
         {"-t", &out_program_options->stop_command},
-        {"--start-load", &out_program_options->arg_start_load},
+        {"--max-start", &out_program_options->arg_start_load},
         {"--start-interval", &out_program_options->arg_start_interval},
-        {"--quiet-period-over-start", &out_program_options->arg_quiet_period_over_start},
-        {"--stop-load", &out_program_options->arg_stop_load},
+        {"--quiet-max-start", &out_program_options->arg_quiet_period_over_start},
+        {"--min-stop", &out_program_options->arg_stop_load},
         {"--stop-interval", &out_program_options->arg_stop_interval},
-        {"--quiet-period-over-stop", &out_program_options->arg_quiet_period_over_stop},
+        {"--quiet-min-stop", &out_program_options->arg_quiet_period_over_stop},
         {"--timeout", &out_program_options->arg_timeout}
     };
 
@@ -424,13 +424,13 @@ static setup_options_result setup_options(
         {"--start-interval",
          out_program_options->arg_start_interval,
          &out_program_options->start_interval},
-        {"--quiet-period-over-start",
+        {"--quiet-max-start",
          out_program_options->arg_quiet_period_over_start,
          &out_program_options->quiet_period_over_start},
         {"--stop-interval",
          out_program_options->arg_stop_interval,
          &out_program_options->stop_interval},
-        {"--quiet-period-over-stop",
+        {"--quiet-min-stop",
          out_program_options->arg_quiet_period_over_stop,
          &out_program_options->quiet_period_over_stop},
         {"--timeout",
@@ -458,7 +458,7 @@ static setup_options_result setup_options(
 
     if (out_program_options->arg_start_load != NULL) {
         if (!parse_load_argument(
-                "--start-load",
+                "--max-start",
                 out_program_options->arg_start_load,
                 &out_program_options->start_load)) {
             return OPTIONS_FAILURE;
@@ -477,7 +477,7 @@ static setup_options_result setup_options(
 
     if (out_program_options->arg_stop_load != NULL) {
         if (!parse_load_argument(
-                "--stop-load",
+                "--min-stop",
                 out_program_options->arg_stop_load,
                 &out_program_options->stop_load)) {
             return OPTIONS_FAILURE;
