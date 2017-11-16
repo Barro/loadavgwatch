@@ -58,7 +58,7 @@ static bool _string_to_timespec(
 
     const char* current_start = time_str;
     size_t max_label_id = sizeof(labels) / sizeof(labels[0]);
-    time_t current_seconds = 0;
+    double current_seconds = 0;
     for (size_t label_id = 0;
          label_id < max_label_id && *current_start != '\0';
          label_id++) {
@@ -107,6 +107,11 @@ static bool _string_to_timespec(
         return false;
     }
     out_result->tv_sec = current_seconds;
-    out_result->tv_nsec = 0;
+    // Adding 0.0000000005 to the result is poor man's rounding up to
+    // avoid the x.xxx99999999... type of result without using the
+    // math library that causes annoying extra linkage requirements on
+    // Linux.
+    out_result->tv_nsec = 1000000000 * (
+        current_seconds - out_result->tv_sec + 0.0000000005);
     return true;
 }
