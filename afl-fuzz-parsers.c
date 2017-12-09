@@ -17,6 +17,7 @@
  */
 
 #define _XOPEN_SOURCE 600
+#define _POSIX_C_SOURCE 200809L
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -71,6 +72,22 @@ void fuzz_one(FILE* input_fp)
     }
 }
 
+int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
+{
+    if (size == 0) {
+        return 0;
+    }
+    FILE* input_fp = fmemopen((void*)data, size, "rb");
+    if (input_fp == NULL) {
+        perror("Unable to allocate memory based file");
+        abort();
+    }
+    fuzz_one(input_fp);
+    fclose(input_fp);
+    return 0;
+}
+
+#ifndef USE_LIBFUZZER
 int main(int argc, char* argv[])
 {
     if (argc < 2) {
@@ -103,3 +120,4 @@ int main(int argc, char* argv[])
 
     return EXIT_SUCCESS;
 }
+#endif // #ifdef USE_LIBFUZZER

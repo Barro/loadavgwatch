@@ -14,6 +14,21 @@
 # You should have received a copy of the GNU General Public License
 # along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
 
+config_setting(
+    name = "linux_mode",
+    values = { "cpu": "k8" }
+)
+
+config_setting(
+    name = "darwin_mode",
+    values = { "cpu": "darwin" }
+)
+
+config_setting(
+    name = "freebsd_mode",
+    values = { "cpu": "freebsd" }
+)
+
 cc_library(
     name = "libloadavgwatch_impl",
     srcs = ["loadavgwatch.c", "loadavgwatch-impl.h"] + select({
@@ -36,11 +51,13 @@ cc_library(
     visibility = ["//visibility:private"],
     licenses = ["reciprocal"],
 )
+
 cc_inc_library(
     name = "libloadavgwatch",
     hdrs = ["loadavgwatch.h"],
     deps = [":libloadavgwatch_impl"],
 )
+
 cc_binary(
     name = "loadavgwatch",
     srcs = ["main.c"],
@@ -48,6 +65,7 @@ cc_binary(
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
 )
+
 cc_binary(
     name = "loadavgwatch-fuzz-parsers",
     srcs = ["afl-fuzz-parsers.c"],
@@ -55,15 +73,12 @@ cc_binary(
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
 )
-config_setting(
-    name = "linux_mode",
-    values = { "cpu": "k8" }
-)
-config_setting(
-    name = "darwin_mode",
-    values = { "cpu": "darwin" }
-)
-config_setting(
-    name = "freebsd_mode",
-    values = { "cpu": "freebsd" }
+
+cc_test(
+    name = "test-main-parsers",
+    srcs = ["test-main-parsers.c"],
+    deps = [":libloadavgwatch"],
+    copts = ["--std=c99", "-Werror=pedantic"],
+    licenses = ["reciprocal"],
+    size = "small",
 )

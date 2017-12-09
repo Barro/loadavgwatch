@@ -32,6 +32,10 @@ static size_t _timespec_to_string(
     const time_t divisors[] = {24 * 60 * 60, 60 * 60, 60, 1};
     const char* labels[] = {"d", "h", "m", "s"};
     time_t remainder_seconds = value->tv_sec;
+    if (remainder_seconds == 0) {
+        size_t written = snprintf(out_result, result_size, "0s");
+        return result_size - written;
+    }
     char* output = out_result;
     ssize_t output_remaining = result_size;
     for (int i = 0; i < sizeof(divisors) / sizeof(divisors[0]); ++i) {

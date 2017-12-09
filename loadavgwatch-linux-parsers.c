@@ -71,7 +71,7 @@ static long _get_ncpus_sys_devices(FILE* online_cpus_fp)
     // lazy implementation and this function should be only called
     // once at start-up, one calloc() is not that bad.
     const size_t cpumask_buffer_size = 19370;
-    char* cpumask_buffer = calloc(1, cpumask_buffer_size);
+    char* cpumask_buffer = (char*)calloc(1, cpumask_buffer_size);
     if (cpumask_buffer == NULL) {
         return -1;
     }
