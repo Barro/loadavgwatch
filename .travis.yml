@@ -23,7 +23,7 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo dpkg -i bazel_"${BAZEL_VERSION}"-linux-x86_64.deb; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HOMEBREW_NO_AUTO_UPDATE=1 brew install bazel coreutils meson; fi
 
-osx_image: xcode9.1
+osx_image: xcode9.2
 
 compiler:
   - gcc
