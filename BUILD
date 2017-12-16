@@ -31,9 +31,17 @@ config_setting(
     values = { "cpu": "freebsd" }
 )
 
+cc_inc_library(
+    name = "loadavgwatch_inc",
+    hdrs = ["loadavgwatch.h"],
+)
+
 cc_library(
-    name = "libloadavgwatch_impl",
-    srcs = ["loadavgwatch.c", "loadavgwatch-impl.h"] + select({
+    name = "lib/loadavgwatch",
+    srcs = [
+        "loadavgwatch.c",
+        "loadavgwatch-impl.h",
+    ] + select({
         ":linux_mode": ["loadavgwatch-linux.c"],
         ":darwin_mode": ["loadavgwatch-darwin.c"],
         ":freebsd_mode": ["loadavgwatch-bsd.c"],
@@ -41,7 +49,7 @@ cc_library(
     hdrs = [
         "loadavgwatch.h",
         "main-parsers.c",
-        "loadavgwatch-linux-parsers.c"
+        "loadavgwatch-linux-parsers.c",
     ] + select({
         # Make included system specific .c files visible to the
         # compilation without compiling them:
@@ -49,21 +57,16 @@ cc_library(
         ":darwin_mode": ["loadavgwatch-sysctl.c"],
         ":freebsd_mode": ["loadavgwatch-sysctl.c"],
     }),
+    deps = [":loadavgwatch_inc"],
     copts = ["--std=c99", "-Werror=pedantic"],
     visibility = ["//visibility:private"],
     licenses = ["reciprocal"],
 )
 
-cc_inc_library(
-    name = "libloadavgwatch",
-    hdrs = ["loadavgwatch.h"],
-    deps = [":libloadavgwatch_impl"],
-)
-
 cc_binary(
     name = "loadavgwatch",
     srcs = ["main.c"],
-    deps = [":libloadavgwatch"],
+    deps = [":lib/loadavgwatch"],
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
 )
@@ -71,7 +74,7 @@ cc_binary(
 cc_binary(
     name = "loadavgwatch-fuzz-parsers",
     srcs = ["afl-fuzz-parsers.c"],
-    deps = [":libloadavgwatch"],
+    deps = [":lib/loadavgwatch"],
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
 )
@@ -79,7 +82,7 @@ cc_binary(
 cc_test(
     name = "test-main-parsers",
     srcs = ["test-main-parsers.c"],
-    deps = [":libloadavgwatch"],
+    deps = [":lib/loadavgwatch"],
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
     size = "small",
