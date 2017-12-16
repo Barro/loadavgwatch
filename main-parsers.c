@@ -60,9 +60,14 @@ static bool _string_to_timespec(
     const char labels[] = {'d', 'h', 'm', 's'};
     const time_t multipliers[] = {24 * 60 * 60, 60 * 60, 60, 1};
 
-    const char* current_start = time_str;
     size_t max_label_id = sizeof(labels) / sizeof(labels[0]);
     double current_seconds = 0;
+    const char* current_start = time_str;
+    // Skip over spaces before the first number:
+    while (*current_start == ' ') {
+        ++current_start;
+    }
+    const char* numbers_start = current_start;
     for (size_t label_id = 0;
          label_id < max_label_id && *current_start != '\0';
          label_id++) {
@@ -74,13 +79,14 @@ static bool _string_to_timespec(
         if (endptr == current_start) {
             return false;
         }
+        // Skip over spaces after numbers:
         while (*endptr == ' ') {
             ++endptr;
         }
         if (*endptr == '\0') {
             // We have a string that consists solely from
             // numbers. Treat it as seconds:
-            if (current_start == time_str) {
+            if (current_start == numbers_start) {
                 current_seconds = label_value;
                 current_start = endptr;
                 break;
@@ -97,17 +103,22 @@ static bool _string_to_timespec(
             return false;
         }
         current_seconds += label_value * multipliers[label_id];
-        while (*endptr == ' ') {
-            ++endptr;
+        // Skip over spaces before numbers:
+        while (*current_start == ' ') {
+            ++current_start;
         }
         current_start = endptr + 1;
+    }
+    // Skip over spaces after the last number:
+    while (*current_start == ' ') {
+        ++current_start;
     }
     // There is something after the last known time unit label:
     if (*current_start != '\0') {
         return false;
     }
     // We got an empty string as timespec value:
-    if (current_start == time_str) {
+    if (current_start == numbers_start) {
         return false;
     }
     out_result->tv_sec = current_seconds;

@@ -31,3 +31,4 @@ endif
 lib = static_library('loadavgwatch', library_files, c_args : ['-Werror=pedantic'])
 executable('loadavgwatch', executable_files, link_with : lib, c_args : ['-Werror=pedantic'])
 executable('loadavgwatch-fuzz-parsers', fuzzer_files, c_args : ['-Werror=pedantic'])
+executable('test-main-parsers', ['test-main-parsers.c'], c_args : ['-Werror=pedantic'])

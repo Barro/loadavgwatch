@@ -18,7 +18,7 @@
 #define ASSERT_STRING_TO_TIMESPEC_NSEC_OUT(sec, nsec, time_str)      \
     { \
         struct timespec time; \
-        _string_to_timespec(time_str, &time); \
+        assert(_string_to_timespec(time_str, &time)); \
         assert(time.tv_sec == (sec) && time.tv_nsec == (nsec) \
                && "Seconds parsed from " time_str " did not match expected"); \
     }
@@ -26,7 +26,7 @@
 #define ASSERT_STRING_TO_TIMESPEC_OUT(sec, time_str)   \
     { \
         struct timespec time; \
-        _string_to_timespec(time_str, &time); \
+        assert(_string_to_timespec(time_str, &time)); \
         assert(time.tv_sec == (sec) && time.tv_nsec == 0 \
                && "Seconds parsed from " time_str " did not match expected"); \
     }
@@ -53,6 +53,7 @@ void test_string_to_timespec_should_be_able_to_parse_all_regular_time_units(void
 
 void test_string_to_timespec_should_be_able_to_parse_more_exotic_time_representations(void)
 {
+    ASSERT_STRING_TO_TIMESPEC_OUT(1, " 1 ");
     ASSERT_STRING_TO_TIMESPEC_OUT(1, " 1s");
     ASSERT_STRING_TO_TIMESPEC_OUT(1, " 1 s");
     ASSERT_STRING_TO_TIMESPEC_OUT(1, " 1 s ");
