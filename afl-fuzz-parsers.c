@@ -90,12 +90,6 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 #ifndef USE_LIBFUZZER
 int main(int argc, char* argv[])
 {
-    if (argc < 2) {
-        const char error_message[] = "Need to give an input file as the first parameter!\n";
-        fwrite(error_message, sizeof(error_message), 1, stderr);
-        return EXIT_FAILURE;
-    }
-
 #ifdef __AFL_HAVE_MANUAL_CONTROL
     __AFL_INIT();
 #endif // #ifdef __AFL_HAVE_MANUAL_CONTROL
@@ -108,7 +102,7 @@ int main(int argc, char* argv[])
         iterating = false;
 #endif // #ifdef __AFL_LOOP
 
-        FILE* input_fp = fopen(argv[1], "r");
+        FILE* input_fp = stdin;
         if (input_fp == NULL) {
             perror("Unable to open input file");
             return EXIT_FAILURE;

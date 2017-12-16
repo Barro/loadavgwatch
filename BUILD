@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with loadavgwatch.  If not, see <http://www.gnu.org/licenses/>.
 
+load(":loadavgwatch.bzl", "parser_test")
+
 config_setting(
     name = "linux_mode",
     values = { "cpu": "k8" }
@@ -81,4 +83,10 @@ cc_test(
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
     size = "small",
+)
+
+parser_test(
+    name = "test-initial-fuzz-input",
+    binary = "loadavgwatch-fuzz-parsers",
+    inputs = glob(["fuzz-inputs/*"]),
 )
