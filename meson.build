@@ -28,7 +28,29 @@ elif target_machine.system() == 'freebsd'
     library_files += ['loadavgwatch-bsd.c']
 endif
 
-lib = static_library('loadavgwatch', library_files, c_args : ['-Werror=pedantic'])
-executable('loadavgwatch', executable_files, link_with : lib, c_args : ['-Werror=pedantic'])
+lib = static_library(
+    'loadavgwatch',
+    library_files,
+    install : true,
+    c_args : ['-Werror=pedantic'])
+executable(
+    'loadavgwatch',
+    executable_files,
+    install : true,
+    link_with : lib,
+    c_args : ['-Werror=pedantic'])
 executable('loadavgwatch-fuzz-parsers', fuzzer_files, c_args : ['-Werror=pedantic'])
 executable('test-main-parsers', ['test-main-parsers.c'], c_args : ['-Werror=pedantic'])
+
+install_headers('loadavgwatch.h')
+install_man('loadavgwatch.1')
+conf_data = configuration_data()
+conf_data.set('PACKAGE_VERSION', '0.0.0')
+prefix = get_option('prefix')
+conf_data.set('libdir', join_paths(prefix, get_option('libdir')))
+conf_data.set('includedir', join_paths(prefix, get_option('includedir')))
+configure_file(
+    input : 'libloadavgwatch.pc.in',
+    output : 'libloadavgwatch.pc',
+    configuration : conf_data,
+    install_dir : join_paths(prefix, get_option('libdir'), 'pkgconfig'))
