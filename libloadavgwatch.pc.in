@@ -1,0 +1,9 @@
+includedir=@includedir@
+libdir=@libdir@
+
+Name: libloadavgwatch
+Description: Library to help in starting tasks based load average value.
+URL: https://github.com/Barro/loadavgwatch
+Version: @PACKAGE_VERSION@
+Cflags: -I${includedir}
+Libs: -L${libdir} -lloadavgwatch
