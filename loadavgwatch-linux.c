@@ -38,7 +38,7 @@ static loadavgwatch_status get_load_average_proc_loadavg(
     state_linux* state, float* out_loadavg)
 {
     fseek(state->loadavg_fp, 0, SEEK_SET);
-    fflush(loadavg_fp);
+    fflush(state->loadavg_fp);
     return _get_load_average_proc_loadavg(state->loadavg_fp, out_loadavg);
 }
 
