@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -142,6 +143,7 @@ static struct {
 
 static unsigned g_child_execution_warning_timeout;
 static const char* g_child_action;
+static const char* g_shortest_interval_name;
 
 static void
 alarm_handler(int sig, siginfo_t* info, void* ucontext)
@@ -150,10 +152,11 @@ alarm_handler(int sig, siginfo_t* info, void* ucontext)
     snprintf(
         warning_message,
         sizeof(warning_message),
-        "Process for %s action took more that %u seconds to execute! "
+        "Process for %s action took more that %u seconds to execute that is more than %s! "
         "You might want to see the README for hints for using this program.",
         g_child_action,
-        g_child_execution_warning_timeout);
+        g_child_execution_warning_timeout,
+        g_shortest_interval_name);
     log_warning(warning_message, stderr);
 }
 
@@ -517,36 +520,109 @@ static setup_options_result setup_options(
     return OPTIONS_OK;
 }
 
+bool run_sh_command(const char* command)
+{
+    pid_t child_pid = fork();
+    if (child_pid == -1) {
+        PRINT_LOG_MESSAGE(
+            g_log.error,
+            "Unable to fork() a new process. This should never happen!");
+        return false;
+    }
+    if (child_pid == 0) {
+        char* const child_args[] = {"/bin/sh", "-c", (char*)command, NULL};
+        int result = execv("/bin/sh", child_args);
+        if (result == -1) {
+            PRINT_LOG_MESSAGE(g_log.error, "Unable to execute /bin/sh");
+            return false;
+        }
+    }
+    int wait_status;
+    pid_t waited = -1;
+    // If we get a signal while we're in wait() function, it will
+    // result in -1 return value.
+    while (waited == -1) {
+        waited = wait(&wait_status);
+    }
+    assert(waited == child_pid);
+    if (!WIFEXITED(wait_status)) {
+        PRINT_LOG_MESSAGE(
+            g_log.warning,
+            "Child process did not exit normally!");
+    } else if (WEXITSTATUS(wait_status) != EXIT_SUCCESS) {
+        PRINTF_LOG_MESSAGE(
+            g_log.warning,
+            "Child process exited with non-successful code %d!",
+            WEXITSTATUS(wait_status));
+    }
+    return true;
+}
+
 static void run_command(
-    const char* command, const char* child_action)
+    const char* command,
+    const char* child_action,
+    const struct timespec* next_action_interval)
 {
     PRINTF_LOG_MESSAGE(g_log.info, "Running command: %s", command);
     g_child_action = child_action;
-    g_child_execution_warning_timeout = 10;
-    alarm(10);
-    int ret = system(command);
-    alarm(0);
-    if (ret != EXIT_SUCCESS) {
-        PRINTF_LOG_MESSAGE(
-            g_log.warning,
-            "Child process exited with non-zero status %d.",
-            ret);
+    g_child_execution_warning_timeout = next_action_interval->tv_sec + 1;
+    alarm(g_child_execution_warning_timeout);
+    if (!run_sh_command(command)) {
+        PRINT_LOG_MESSAGE(
+            g_log.error,
+            "Unable to run commands with /bin/sh! This should never happen");
+        abort();
     }
+    alarm(0);
 }
 
-static const struct timespec* min_timespec(
+static struct timespec timespec_add(
+    const struct timespec* left, const struct timespec* right)
+{
+    struct timespec result = *left;
+    result.tv_sec += right->tv_sec;
+    result.tv_nsec += right->tv_nsec;
+    if (result.tv_nsec > 999999999) {
+        result.tv_nsec -= 1000000000;
+        result.tv_sec += 1;
+    }
+    return result;
+}
+
+static struct timespec timespec_sub(
+    const struct timespec* left, const struct timespec* right)
+{
+    assert(left->tv_sec >= right->tv_sec);
+    assert(!(left->tv_sec == right->tv_sec
+             && left->tv_nsec < right->tv_nsec));
+    struct timespec result = *left;
+    result.tv_sec -= right->tv_sec;
+    if (result.tv_nsec < right->tv_nsec) {
+        result.tv_sec -= 1;
+        result.tv_nsec += 1000000000;
+        result.tv_nsec -= right->tv_nsec;
+    }
+    return result;
+}
+
+typedef enum TimespecCmp {
+    TS_LEFT_SMALLER = -1,
+    TS_RIGHT_SMALLER = 1,
+} TimespecCmp;
+
+static TimespecCmp timespec_cmp(
     const struct timespec* left, const struct timespec* right)
 {
     if (left->tv_sec < right->tv_sec) {
-        return left;
+        return TS_LEFT_SMALLER;
     }
     if (right->tv_sec < left->tv_sec) {
-        return right;
+        return TS_RIGHT_SMALLER;
     }
     if (left->tv_nsec < right->tv_nsec) {
-        return left;
+        return TS_LEFT_SMALLER;
     }
-    return right;
+    return TS_RIGHT_SMALLER;
 }
 
 static int monitor_and_act(
@@ -563,11 +639,16 @@ static int monitor_and_act(
     // to start new processes. TODO alternative algorithm to determine
     // if we should start new processes or not based on load
     // differential between previous measurement point:
-    struct timespec sleep_time = *min_timespec(
-        &default_sleep_time,
-        min_timespec(
-            &options->start_interval,
-            &options->stop_interval));
+    g_shortest_interval_name = "the default sleep interval";
+    struct timespec sleep_time = default_sleep_time;
+    if (timespec_cmp(&sleep_time, &options->start_interval) == TS_RIGHT_SMALLER) {
+        g_shortest_interval_name = "the start interval";
+        sleep_time = options->start_interval;
+    }
+    if (timespec_cmp(&sleep_time, &options->stop_interval) == TS_RIGHT_SMALLER) {
+        g_shortest_interval_name = "the stop interval";
+        sleep_time = options->stop_interval;
+    }
 
     struct sigaction alarm_action = {
         .sa_sigaction = alarm_handler,
@@ -580,8 +661,22 @@ static int monitor_and_act(
             g_log.error, "Unable to register program start time!");
         return EXIT_FAILURE;
     }
-    struct timespec end_time = {
-        .tv_sec = start_time.tv_sec + options->timeout.tv_sec };
+    struct timespec end_time = {0, 0};
+    if (options->has_timeout) {
+        end_time = timespec_add(&start_time, &options->timeout);
+    }
+
+    struct {
+        struct timespec start_command;
+        struct timespec stop_command;
+        struct timespec timeout;
+        struct timespec sleep;
+    } next_action_time = {
+        .start_command = {0, 0},
+        .stop_command = {0, 0},
+        .timeout = end_time,
+        .sleep = timespec_add(&start_time, &sleep_time)
+    };
 
     bool running = true;
     while (running) {
@@ -589,6 +684,17 @@ static int monitor_and_act(
         if (loadavgwatch_poll(state, &poll_result) != LOADAVGWATCH_OK) {
             abort();
         }
+
+        // Register start/stop time before reading the current time so
+        // that we end up better executing commands in correct
+        // intervals:
+        struct timespec poll_end;
+        if (clock_gettime(CLOCK_MONOTONIC, &poll_end) != 0) {
+            PRINT_LOG_MESSAGE(
+                g_log.error, "Unable to register the current time!");
+            return EXIT_FAILURE;
+        }
+        next_action_time.sleep = timespec_add(&poll_end, &sleep_time);
         if (poll_result.start_count > 0) {
             loadavgwatch_register_start(state);
             if (options->start_command != NULL) {
@@ -596,7 +702,7 @@ static int monitor_and_act(
                     PRINTF_LOG_MESSAGE(
                         g_log.info, "Running: %s", options->start_command);
                 } else {
-                    run_command(options->start_command, "start");
+                    run_command(options->start_command, "start", &sleep_time);
                 }
             }
         }
@@ -607,27 +713,52 @@ static int monitor_and_act(
                     PRINTF_LOG_MESSAGE(
                         g_log.info, "Running: %s", options->stop_command);
                 } else {
-                    run_command(options->stop_command, "stop");
+                    run_command(options->stop_command, "stop", &sleep_time);
                 }
             }
         }
+
+        if (poll_result.start_count > 0) {
+            next_action_time.start_command = timespec_add(&poll_end, &options->start_interval);
+        }
+        if (poll_result.stop_count > 0) {
+            next_action_time.stop_command = timespec_add(&poll_end, &options->stop_interval);
+        }
+        struct timespec next_action_at = next_action_time.sleep;
+        if (next_action_time.timeout.tv_sec != 0
+            && timespec_cmp(&next_action_at, &next_action_time.timeout) == TS_RIGHT_SMALLER) {
+            next_action_at = next_action_time.timeout;
+        }
+        if (next_action_time.start_command.tv_sec != 0
+            && timespec_cmp(&next_action_at, &next_action_time.start_command) == TS_RIGHT_SMALLER) {
+            next_action_at = next_action_time.start_command;
+        }
+        if (next_action_time.stop_command.tv_sec != 0
+            && timespec_cmp(&next_action_at, &next_action_time.stop_command) == TS_RIGHT_SMALLER) {
+            next_action_at = next_action_time.stop_command;
+        }
+
         struct timespec now;
         if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
             PRINT_LOG_MESSAGE(
                 g_log.error, "Unable to register the current time!");
             return EXIT_FAILURE;
         }
-        struct timespec sleep_remaining = sleep_time;
         if (options->has_timeout
             && end_time.tv_sec < now.tv_sec + sleep_time.tv_sec) {
             PRINT_LOG_MESSAGE(g_log.info, "Timeout reached!");
             running = false;
-            if (end_time.tv_sec <= now.tv_sec) {
-                sleep_remaining.tv_sec = 0;
-            } else {
-                sleep_remaining.tv_sec = end_time.tv_sec - now.tv_sec;
-            }
         }
+        // Do not sleep if we are up for the next action:
+        if (timespec_cmp(&next_action_at, &now) == TS_LEFT_SMALLER) {
+            continue;
+        }
+        struct timespec sleep_remaining = timespec_sub(&next_action_at, &now);
+        PRINTF_LOG_MESSAGE(
+            g_log.info,
+            "Sleeping for %ld.%lds!",
+            sleep_remaining.tv_sec,
+            sleep_remaining.tv_nsec);
         int sleep_return = -1;
         do {
             sleep_return = nanosleep(&sleep_remaining, &sleep_remaining);
@@ -647,6 +778,13 @@ int main(int argc, char* argv[])
     g_log.error_obj.log = log_error;
     g_log.error_obj.data = stderr;
     g_log.error = &g_log.error_obj;
+
+    if (!run_sh_command("exit 0")) {
+        PRINT_LOG_MESSAGE(
+            g_log.error,
+            "Unable to run commands with /bin/sh! This should never happen");
+        return EXIT_FAILURE;
+    }
 
     loadavgwatch_state* state;
     {
