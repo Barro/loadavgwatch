@@ -19,18 +19,13 @@ test_installation()
     cc -shared -c $(pkg-config --cflags --libs libloadavgwatch) "$WORKDIR"/header.c
 }
 
-# TODO for some reason Meson build on OS X in Travis CI does not
-# recognize fmemopen() function and fails.
-if [ "$TRAVIS_OS_NAME" != osx ]; then
-    meson build-meson
-    ninja -C build-meson
-    "$TIMEOUT" 2 build-meson/loadavgwatch --help
-    "$TIMEOUT" 2 build-meson/loadavgwatch --version
-    "$TIMEOUT" 2 build-meson/loadavgwatch --timeout 0
-
-    sudo ninja -C build-meson install
-    test_installation
-fi
+meson build-meson
+ninja -C build-meson
+"$TIMEOUT" 2 build-meson/loadavgwatch --help
+"$TIMEOUT" 2 build-meson/loadavgwatch --version
+"$TIMEOUT" 2 build-meson/loadavgwatch --timeout 0
+sudo ninja -C build-meson install
+test_installation
 
 bazel test --test_output=errors :all
 "$TIMEOUT" 2 bazel-bin/loadavgwatch --help

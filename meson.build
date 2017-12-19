@@ -46,13 +46,6 @@ test('Parser tests',
          ['test-main-parsers.c'],
          c_args : ['-Werror=pedantic']))
 
-# Just make sure that the fuzz target compiles:
-fuzz_target_files = ['afl-fuzz-parsers.c']
-fuzz_target = executable(
-    'loadavgwatch-fuzz-parsers',
-    fuzz_target_files,
-    c_args : ['-Werror=pedantic'])
-
 # Installation information:
 install_headers('loadavgwatch.h')
 install_man('loadavgwatch.1')
