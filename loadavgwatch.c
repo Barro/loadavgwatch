@@ -364,6 +364,8 @@ loadavgwatch_status loadavgwatch_poll(
     loadavgwatch_status read_status = state->impl.get_load_average(
         state->impl_state, &load_average);
     if (read_status != LOADAVGWATCH_OK) {
+        PRINT_LOG_MESSAGE(
+            state->log_warning, "Unable to read the current load average!");
         *out_result = result;
         return read_status;
     }
