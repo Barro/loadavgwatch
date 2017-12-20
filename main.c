@@ -720,9 +720,13 @@ static int monitor_and_act(
 
         if (poll_result.start_count > 0) {
             next_action_time.start_command = timespec_add(&poll_end, &options->start_interval);
+        } else if (timespec_cmp(&next_action_time.start_command, &poll_end) == TS_RIGHT_SMALLER) {
+            next_action_time.start_command = (struct timespec){0, 0};
         }
         if (poll_result.stop_count > 0) {
             next_action_time.stop_command = timespec_add(&poll_end, &options->stop_interval);
+        } else if (timespec_cmp(&next_action_time.stop_command, &poll_end) == TS_RIGHT_SMALLER) {
+            next_action_time.stop_command = (struct timespec){0, 0};
         }
         struct timespec next_action_at = next_action_time.sleep;
         if (next_action_time.timeout.tv_sec != 0
@@ -756,7 +760,7 @@ static int monitor_and_act(
         struct timespec sleep_remaining = timespec_sub(&next_action_at, &now);
         PRINTF_LOG_MESSAGE(
             g_log.info,
-            "Sleeping for %ld.%lds!",
+            "Sleeping for %ld.%09lds!",
             sleep_remaining.tv_sec,
             sleep_remaining.tv_nsec);
         int sleep_return = -1;
