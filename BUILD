@@ -88,6 +88,15 @@ cc_test(
     size = "small",
 )
 
+cc_test(
+    name = "test-linux-parsers",
+    srcs = ["test-linux-parsers.c"],
+    deps = [":lib/loadavgwatch"],
+    copts = ["--std=c99", "-Werror=pedantic"],
+    licenses = ["reciprocal"],
+    size = "small",
+)
+
 parser_test(
     name = "test-initial-fuzz-input",
     binary = "loadavgwatch-fuzz-parsers",
