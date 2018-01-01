@@ -2,7 +2,7 @@
 
 set -xeuo pipefail
 
-BAZEL_VERSION=0.8.1
+BAZEL_VERSION=0.9.0
 
 sudo pip3 install meson
 wget https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-linux.zip -O "$TRAVIS_BUILD_DIR"/ninja-linux.zip
