@@ -18,9 +18,7 @@
 
 #define _XOPEN_SOURCE 600
 
-#include "main-parsers.c"
 #include <assert.h>
-#include <loadavgwatch.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -30,6 +28,9 @@
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+#include "loadavgwatch.h"
+#include "main-parsers.c"
 
 static inline void PRINTF_LOG_MESSAGE(
     loadavgwatch_log_object* log_object, const char* format, ...)

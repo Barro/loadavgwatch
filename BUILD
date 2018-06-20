@@ -31,7 +31,7 @@ config_setting(
     values = { "cpu": "freebsd" }
 )
 
-cc_inc_library(
+cc_library(
     name = "loadavgwatch_inc",
     hdrs = ["loadavgwatch.h"],
 )
@@ -66,7 +66,7 @@ cc_library(
 cc_binary(
     name = "loadavgwatch",
     srcs = ["main.c"],
-    deps = [":lib/loadavgwatch"],
+    deps = [":lib/loadavgwatch", ":loadavgwatch_inc"],
     copts = ["--std=c99", "-Werror=pedantic"],
     licenses = ["reciprocal"],
 )
