@@ -90,7 +90,7 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
 #ifndef USE_LIBFUZZER
 int main(int argc, char* argv[])
 {
-#ifdef __AFL_HAVE_MANUAL_CONTROL
+#if defined(__AFL_HAVE_MANUAL_CONTROL) && !defined(__AFL_LOOP)
     __AFL_INIT();
 #endif // #ifdef __AFL_HAVE_MANUAL_CONTROL
 
